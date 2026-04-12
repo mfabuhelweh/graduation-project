@@ -1,0 +1,80 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "Stores user information, authentication status, and voting status.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID" },
+        "displayName": { "type": "string", "description": "User's full name" },
+        "email": { "type": "string", "format": "email", "description": "User's email" },
+        "photoURL": { "type": "string", "format": "uri", "description": "User's profile picture" },
+        "role": { "type": "string", "enum": ["admin", "voter"], "description": "User's role in the system" },
+        "nationalId": { "type": "string", "description": "Jordanian National ID (10 digits)" },
+        "hasVoted": { "type": "boolean", "description": "Whether the user has cast their vote" },
+        "districtId": { "type": "string", "description": "Assigned local district ID" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Account creation timestamp" }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "Election": {
+      "title": "Election",
+      "description": "Defines an election district or national list.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique election ID" },
+        "title": { "type": "string", "description": "Election name (e.g., Amman 1st District)" },
+        "type": { "type": "string", "enum": ["محلي", "عام"], "description": "Local or General election" },
+        "faculty": { "type": "string", "description": "Governorate or Kingdom" },
+        "voters": { "type": "number", "description": "Total eligible voters" },
+        "votes": { "type": "number", "description": "Total cast votes" },
+        "status": { "type": "string", "enum": ["Active", "Voting Open", "Results Published", "Closed", "Draft"], "description": "Current status" },
+        "candidates": { "type": "number", "description": "Number of candidates/lists" }
+      },
+      "required": ["title", "type", "status"]
+    },
+    "AuditLog": {
+      "title": "Audit Log",
+      "description": "Immutable record of system and user actions.",
+      "type": "object",
+      "properties": {
+        "event": { "type": "string", "description": "Action name" },
+        "user": { "type": "string", "description": "User who performed the action" },
+        "uid": { "type": "string", "description": "UID of the user" },
+        "time": { "type": "string", "format": "date-time", "description": "Timestamp of the event" },
+        "details": { "type": "string", "description": "Detailed description of the action" }
+      },
+      "required": ["event", "user", "time"]
+    },
+    "Vote": {
+      "title": "Vote Record",
+      "description": "Encrypted vote record (simulated).",
+      "type": "object",
+      "properties": {
+        "electionId": { "type": "string", "description": "ID of the election" },
+        "listId": { "type": "string", "description": "ID of the selected list" },
+        "encryptedPayload": { "type": "string", "description": "Encrypted vote data" },
+        "timestamp": { "type": "string", "format": "date-time", "description": "Time of vote" }
+      },
+      "required": ["electionId", "listId", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/users/{uid}": {
+      "schema": "User",
+      "description": "User profiles and status."
+    },
+    "/elections/{electionId}": {
+      "schema": "Election",
+      "description": "Election districts and metadata."
+    },
+    "/audit_logs/{logId}": {
+      "schema": "AuditLog",
+      "description": "System audit logs."
+    },
+    "/votes/{voteId}": {
+      "schema": "Vote",
+      "description": "Cast votes (encrypted)."
+    }
+  }
+}

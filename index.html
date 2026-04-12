@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>My Google AI Studio App</title>
+    <script>
+      // Fix for "Cannot set property fetch of #<Window> which has only a getter"
+      // This happens when libraries try to polyfill fetch on the global object.
+      if (typeof window.global === 'undefined') {
+        window.global = new Proxy(window, {
+          set: (target, prop, value) => {
+            if (prop === 'fetch') {
+              console.warn('Prevented attempt to overwrite read-only window.fetch');
+              return true;
+            }
+            target[prop] = value;
+            return true;
+          },
+          get: (target, prop) => {
+            return target[prop];
+          }
+        });
+      }
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

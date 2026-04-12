@@ -1,0 +1,134 @@
+// ===============================================================
+// Assumed Data Model
+// ===============================================================
+//
+// Collection: users
+// Document ID: {uid}
+// Fields:
+//   - uid: string (required) - Firebase Auth UID
+//   - displayName: string - User's full name
+//   - email: string (required, format: email) - User's email
+//   - photoURL: string (format: uri) - User's profile picture
+//   - role: string (enum: ['admin', 'voter']) - User's role
+//   - nationalId: string - Jordanian National ID (10 digits)
+//   - hasVoted: boolean - Whether the user has cast their vote
+//   - districtId: string - Assigned local district ID
+//   - createdAt: string (format: date-time) - Account creation timestamp
+//
+// Collection: elections
+// Document ID: {electionId}
+// Fields:
+//   - id: string - Unique election ID
+//   - title: string (required) - Election name
+//   - type: string (enum: ['محلي', 'عام']) - Local or General
+//   - faculty: string - Governorate or Kingdom
+//   - voters: number - Total eligible voters
+//   - votes: number - Total cast votes
+//   - status: string (enum: ['Active', 'Voting Open', 'Results Published', 'Closed', 'Draft']) - Current status
+//   - candidates: number - Number of candidates/lists
+//
+// Collection: audit_logs
+// Document ID: {logId}
+// Fields:
+//   - event: string (required) - Action name
+//   - user: string (required) - User name
+//   - uid: string - UID of the user
+//   - time: timestamp (required) - Timestamp of the event
+//   - details: string - Detailed description
+//
+// Collection: votes
+// Document ID: {voteId}
+// Fields:
+//   - electionId: string (required) - ID of the election
+//   - localList: string - Selected local list
+//   - localCandidates: list<string> - Selected candidates in local list
+//   - partyList: string - Selected party list
+//   - timestamp: timestamp (required) - Time of vote
+//   - voterUid: string - UID of the voter (Note: SAD says anonymous, but code stores this)
+//
+// ===============================================================
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && (
+        request.auth.token.email == "yousefx940@gmail.com" ||
+        request.auth.token.email == "yousefabuhelwa@gmail.com" ||
+        request.auth.uid == "JmzWrphe4VcoS49ObNwVB8qEBSK2" ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+      );
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasOnly(['uid', 'displayName', 'email', 'photoURL', 'role', 'nationalId', 'hasVoted', 'districtId', 'createdAt']) &&
+             data.uid is string &&
+             data.email is string && isValidEmail(data.email) &&
+             data.role in ['admin', 'voter'];
+    }
+
+    function isValidElection(data) {
+      return data.keys().hasAll(['title', 'type', 'status']) &&
+             data.title is string && data.title.size() > 0 && data.title.size() < 200 &&
+             data.type in ['محلي', 'عام'] &&
+             data.status in ['Active', 'Voting Open', 'Results Published', 'Closed', 'Draft'];
+    }
+
+    function isValidVote(data) {
+      return data.keys().hasAll(['electionId', 'timestamp']) &&
+             data.electionId is string &&
+             data.timestamp is timestamp;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isAuthenticated() && isOwner(userId) && isValidUser(request.resource.data) && 
+                    (request.resource.data.role == 'voter' || isAdmin());
+      allow update: if isAuthenticated() && (
+        (isOwner(userId) && request.resource.data.role == resource.data.role && isValidUser(request.resource.data)) ||
+        isAdmin()
+      );
+    }
+
+    match /elections/{electionId} {
+      allow read: if true; // Publicly readable for results and info
+      allow create, update, delete: if isAdmin() && isValidElection(request.resource.data);
+    }
+
+    match /audit_logs/{logId} {
+      allow read: if isAdmin();
+      allow create: if isAuthenticated(); // Allow users to log their own actions (like voting)
+    }
+
+    match /votes/{voteId} {
+      allow read: if isAdmin();
+      allow create: if isAuthenticated() && isValidVote(request.resource.data);
+    }
+
+    match /test/connection {
+      allow read: if true;
+    }
+  }
+}

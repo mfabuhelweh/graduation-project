@@ -1,0 +1,4 @@
+election_title,district_code,list_code,full_name,national_id,candidate_order,candidate_number,gender,quota_name,photo_url
+انتخابات مجلس النواب الأردني 2026,D1,L101,ليث سمير,9100000001,1,1,male,,https://example.com/list-laith.jpg
+انتخابات مجلس النواب الأردني 2026,D1,L101,هبة محمود,9100000002,2,2,female,Women quota,https://example.com/list-heba.jpg
+انتخابات مجلس النواب الأردني 2026,D2,L201,فاطمة عمر,9100000003,1,1,female,,https://example.com/list-fatima.jpg

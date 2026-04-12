@@ -1,0 +1,7 @@
+{
+  "name": "Remix: Remix: Remix: JordanVote: National Parliamentary \u0026 Party Election Platform",
+  "description": "A secure electronic voting platform designed for the Jordanian House of Representatives and Political Party elections, featuring district-based voting and national party lists.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}

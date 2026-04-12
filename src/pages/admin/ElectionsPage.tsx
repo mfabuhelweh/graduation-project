@@ -1,0 +1,196 @@
+import * as React from 'react';
+import {
+  CalendarDays,
+  Eye,
+  Pencil,
+  RefreshCw,
+  Users,
+  Vote,
+} from 'lucide-react';
+
+interface ElectionsPageProps {
+  elections: any[];
+  language: 'ar' | 'en';
+  setToast: (toast: any) => void;
+  onOpenDetails: (electionId: string) => void;
+  onEdit: (electionId: string) => void;
+  onRefresh: () => Promise<void>;
+}
+
+const statusLabels: Record<string, string> = {
+  draft: 'مسودة',
+  scheduled: 'مجدول',
+  active: 'نشط',
+  closed: 'مغلق',
+  archived: 'مؤرشف',
+};
+
+export const ElectionsPage = ({
+  elections,
+  setToast,
+  onOpenDetails,
+  onEdit,
+  onRefresh,
+}: ElectionsPageProps) => {
+  const [isRefreshing, setIsRefreshing] = React.useState(false);
+
+  const showToast = React.useCallback(
+    (message: string, type: 'success' | 'error') => {
+      setToast({ message, type });
+      window.setTimeout(() => setToast(null), type === 'success' ? 2000 : 3500);
+    },
+    [setToast],
+  );
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await onRefresh();
+      showToast('تم تحديث قائمة الانتخابات.', 'success');
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-row-reverse items-start justify-between gap-4">
+        <div className="text-right">
+          <h2 className="text-2xl font-black text-slate-900">الانتخابات الثابتة في الموقع</h2>
+          <p className="mt-2 text-sm text-slate-500">
+            هذه الصفحة تعرض فقط انتخابي النواب الثابتين في النظام: الدوائر المحلية والقوائم الحزبية.
+            يمكنك تعديل البيانات والدخول للتفاصيل والملفات، لكن لا يتم إنشاء انتخابات جديدة من هنا.
+          </p>
+        </div>
+
+        <button
+          onClick={handleRefresh}
+          className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50"
+        >
+          <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+          تحديث
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 text-right shadow-sm">
+          <p className="text-xs font-bold text-slate-400">إجمالي الانتخابات</p>
+          <p className="mt-3 text-3xl font-black text-slate-900">{elections.length}</p>
+        </div>
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 text-right shadow-sm">
+          <p className="text-xs font-bold text-slate-400">الانتخابات النشطة</p>
+          <p className="mt-3 text-3xl font-black text-emerald-600">
+            {elections.filter((item) => item.status === 'active').length}
+          </p>
+        </div>
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 text-right shadow-sm">
+          <p className="text-xs font-bold text-slate-400">الأحزاب المسجلة</p>
+          <p className="mt-3 text-3xl font-black text-blue-600">
+            {elections.reduce((sum, item) => sum + Number(item.partiesCount || 0), 0)}
+          </p>
+        </div>
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 text-right shadow-sm">
+          <p className="text-xs font-bold text-slate-400">الناخبون المستوردون</p>
+          <p className="mt-3 text-3xl font-black text-amber-600">
+            {elections.reduce((sum, item) => sum + Number(item.votersCount || 0), 0)}
+          </p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        {elections.map((election) => (
+          <div key={election.id} className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="flex flex-row-reverse items-start justify-between gap-4">
+              <div className="text-right">
+                <h3 className="text-xl font-black text-slate-900">{election.title}</h3>
+                <p className="mt-2 text-sm text-slate-500">{election.description || 'لا يوجد وصف مضاف بعد.'}</p>
+              </div>
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">
+                {statusLabels[election.status] || election.status}
+              </span>
+            </div>
+
+            <div className="mt-5 grid grid-cols-2 gap-3 text-right md:grid-cols-4">
+              <div className="rounded-xl bg-slate-50 p-3">
+                <p className="text-xs text-slate-400">الدوائر</p>
+                <p className="mt-2 text-lg font-black text-slate-900">{Number(election.districtsCount || 0)}</p>
+              </div>
+              <div className="rounded-xl bg-slate-50 p-3">
+                <p className="text-xs text-slate-400">الأحزاب</p>
+                <p className="mt-2 text-lg font-black text-slate-900">{Number(election.partiesCount || 0)}</p>
+              </div>
+              <div className="rounded-xl bg-slate-50 p-3">
+                <p className="text-xs text-slate-400">القوائم المحلية</p>
+                <p className="mt-2 text-lg font-black text-slate-900">{Number(election.districtListsCount || 0)}</p>
+              </div>
+              <div className="rounded-xl bg-slate-50 p-3">
+                <p className="text-xs text-slate-400">الناخبون</p>
+                <p className="mt-2 text-lg font-black text-slate-900">{Number(election.votersCount || 0)}</p>
+              </div>
+            </div>
+
+            <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500">
+                <span className="inline-flex items-center gap-1">
+                  <CalendarDays className="h-3.5 w-3.5" />
+                  البداية: {new Date(election.startAt || election.startDate).toLocaleString('ar-JO')}
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <Vote className="h-3.5 w-3.5" />
+                  النهاية: {new Date(election.endAt || election.endDate).toLocaleString('ar-JO')}
+                </span>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={() => onOpenDetails(election.id)}
+                  className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"
+                >
+                  <Eye className="h-4 w-4" />
+                  التفاصيل
+                </button>
+                <button
+                  onClick={() => onEdit(election.id)}
+                  className="inline-flex items-center gap-2 rounded-lg bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700 hover:bg-blue-100"
+                >
+                  <Pencil className="h-4 w-4" />
+                  تعديل
+                </button>
+              </div>
+            </div>
+          </div>
+        ))}
+
+        {elections.length === 0 && (
+          <div className="rounded-2xl border border-slate-200 bg-white px-5 py-12 text-center text-sm font-medium text-slate-500">
+            لا توجد انتخابات حالية في النظام.
+          </div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        {elections.slice(0, 3).map((election) => (
+          <div key={`summary-${election.id}`} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="flex flex-row-reverse items-start justify-between gap-3">
+              <div className="text-right">
+                <h3 className="text-base font-black text-slate-900">{election.title}</h3>
+                <p className="mt-1 text-xs text-slate-500">{election.description || 'بدون وصف مضاف بعد.'}</p>
+              </div>
+              <Users className="mt-1 h-5 w-5 text-slate-400" />
+            </div>
+            <div className="mt-5 grid grid-cols-2 gap-3 text-right text-sm">
+              <div className="rounded-xl bg-slate-50 p-3">
+                <p className="text-xs text-slate-400">أصوات مجهولة</p>
+                <p className="mt-2 font-black text-slate-900">{Number(election.ballotsCount || 0)}</p>
+              </div>
+              <div className="rounded-xl bg-slate-50 p-3">
+                <p className="text-xs text-slate-400">الناخبون</p>
+                <p className="mt-2 font-black text-slate-900">{Number(election.votersCount || 0)}</p>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};

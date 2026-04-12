@@ -1,0 +1,4 @@
+election_title,district_code,full_name,national_id,gender,birth_date,phone_number,email,status
+انتخابات مجلس النواب الأردني 2026,D1,محمد أحمد,1234567890,male,1998-01-12,0790000001,mohammad1@example.com,eligible
+انتخابات مجلس النواب الأردني 2026,D1,ليان خالد,1234567891,female,2001-06-25,0790000002,layan@example.com,eligible
+انتخابات مجلس النواب الأردني 2026,D2,يوسف سمير,1234567892,male,1995-10-03,0790000003,yousef@example.com,eligible

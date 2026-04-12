@@ -1,0 +1,4 @@
+election_title,party_code,full_name,national_id,candidate_order,gender,quota_name,photo_url
+انتخابات مجلس النواب الأردني 2026,P001,أحمد خالد,9000000001,1,male,,https://example.com/candidate-ahmad.jpg
+انتخابات مجلس النواب الأردني 2026,P001,سارة علي,9000000002,2,female,Women quota,https://example.com/candidate-sara.jpg
+انتخابات مجلس النواب الأردني 2026,P002,محمد يوسف,9000000003,1,male,,https://example.com/candidate-mohammad.jpg
