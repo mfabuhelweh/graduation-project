@@ -7,6 +7,7 @@ function normalizeApiBaseUrl(baseUrl: string) {
 const API_BASE_URL = normalizeApiBaseUrl(
   import.meta.env.DEV ? '/api' : configuredApiBaseUrl || '/api',
 );
+const DEV_AUTH_ENABLED = import.meta.env.DEV && import.meta.env.VITE_ENABLE_DEV_AUTH === 'true';
 
 const AUTH_TOKEN_KEY = 'vote_secure_auth_token';
 
@@ -48,7 +49,6 @@ export interface FaceVerificationPayload {
   nationalId: string;
   idCardImageUrl?: string;
   liveCaptureImageUrl?: string;
-  similarityScore?: number;
 }
 
 export interface RegisterPayload {
@@ -110,7 +110,7 @@ async function getAuthHeaders(includeJson = true) {
   const token = readStoredToken();
   if (token) {
     headers.Authorization = `Bearer ${token}`;
-  } else {
+  } else if (DEV_AUTH_ENABLED) {
     headers['X-Dev-Auth'] = 'true';
     headers['X-Dev-Role'] = readDevRole();
   }

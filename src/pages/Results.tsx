@@ -63,9 +63,13 @@ export const Results = ({ isAdmin, setToast, elections = [], preferredElectionId
     () => pickResultsElection(elections, preferredElectionId),
     [elections, preferredElectionId],
   );
+  const isGeneralLocked =
+    !isAdmin &&
+    activeElection?.status === 'active' &&
+    !activeElection?.allowResultsVisibilityBeforeClose;
 
   const load = React.useCallback(async () => {
-    if (!activeElection?.id) {
+    if (!activeElection?.id || isGeneralLocked) {
       setResults(null);
       return;
     }
@@ -84,16 +88,11 @@ export const Results = ({ isAdmin, setToast, elections = [], preferredElectionId
     } finally {
       setLoading(false);
     }
-  }, [activeElection?.id, setToast]);
+  }, [activeElection?.id, isGeneralLocked, setToast]);
 
   React.useEffect(() => {
     load();
   }, [load]);
-
-  const isGeneralLocked =
-    !isAdmin &&
-    activeElection?.status === 'active' &&
-    !activeElection?.allowResultsVisibilityBeforeClose;
 
   const rows = view === 'general' ? results?.parties || [] : results?.districtLists || [];
   const demographics = results?.analytics?.demographics || {};

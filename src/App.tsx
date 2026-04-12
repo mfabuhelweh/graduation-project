@@ -13,7 +13,6 @@ import {
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { cn } from './lib/utils';
-import { filterFixedElections } from './lib/fixedElections';
 import {
   castVote,
   clearAuthToken,
@@ -105,7 +104,7 @@ export default function App() {
 
   const loadElections = React.useCallback(async () => {
     const elections = await fetchElections();
-    setDbElections(filterFixedElections(elections));
+    setDbElections(elections);
   }, []);
 
   React.useEffect(() => {

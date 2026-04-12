@@ -36,6 +36,7 @@ const emptySummary = {
 export const Dashboard = ({
   onReset,
   onRefresh,
+  dbElections,
   setToast,
   showActions = true,
   title = 'لوحة التحكم',
@@ -45,8 +46,29 @@ export const Dashboard = ({
   const [loading, setLoading] = React.useState(true);
   const [refreshing, setRefreshing] = React.useState(false);
   const [resetting, setResetting] = React.useState(false);
+  const shouldLoadRemoteSummary = showActions;
 
   const load = React.useCallback(async () => {
+    if (!shouldLoadRemoteSummary) {
+      const activeElection =
+        dbElections.find((election) => String(election?.status) === 'active') ||
+        dbElections.find((election) => String(election?.status) === 'closed') ||
+        dbElections[0] ||
+        null;
+      const totalVotes = Number(activeElection?.ballotsCount || 0);
+      const totalVoters = Number(activeElection?.votersCount || 0);
+
+      setSummary({
+        ...emptySummary,
+        activeElection,
+        totalVotes,
+        totalVoters,
+        turnout: totalVoters > 0 ? Number(((totalVotes / totalVoters) * 100).toFixed(1)) : 0,
+      });
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     try {
       const response = await fetchDashboardSummary();
@@ -54,7 +76,7 @@ export const Dashboard = ({
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [dbElections, shouldLoadRemoteSummary]);
 
   React.useEffect(() => {
     load();

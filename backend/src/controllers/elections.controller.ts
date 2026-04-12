@@ -19,8 +19,22 @@ export async function getElectionById(req: Request, res: Response) {
 }
 
 export async function getElectionBallot(req: Request, res: Response) {
-  const voterNationalId =
-    typeof req.query.voterNationalId === 'string' ? req.query.voterNationalId : undefined;
+  let voterNationalId: string | undefined;
+
+  if (req.user?.role === 'admin') {
+    voterNationalId = typeof req.query.voterNationalId === 'string' ? req.query.voterNationalId : undefined;
+  } else {
+    if (req.user?.role !== 'voter' || !req.user.nationalId || !req.user.electionId) {
+      return res.status(403).json({ success: false, message: 'Voter authentication is required' });
+    }
+
+    if (req.user.electionId !== req.params.id) {
+      return res.status(403).json({ success: false, message: 'You can only access your assigned election ballot' });
+    }
+
+    voterNationalId = req.user.nationalId;
+  }
+
   res.json({ success: true, data: await getBallotOptions(req.params.id, voterNationalId) });
 }
 

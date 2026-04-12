@@ -86,13 +86,12 @@ export const VotingPage = ({
       const response = await verifyFaceAndIssueToken({
         electionId,
         nationalId,
-        similarityScore: 96,
       });
 
       setVotingToken(response.votingToken);
       setVerificationScore(response.score ?? 96);
 
-      const options = await fetchBallotOptions(electionId, nationalId);
+      const options = await fetchBallotOptions(electionId);
       setBallotOptions(options);
       setSelectedParty(null);
       setSelectedDistrictList(null);
@@ -164,6 +163,10 @@ export const VotingPage = ({
         votingToken,
       });
       setStep(6);
+    } catch (error) {
+      setVerificationMessage(
+        error instanceof Error ? error.message : 'تعذر إرسال الصوت. حاول مرة أخرى.',
+      );
     } finally {
       setIsSubmitting(false);
     }

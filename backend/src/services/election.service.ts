@@ -195,9 +195,7 @@ export async function listElections() {
             (SELECT COUNT(*) FROM voters v WHERE v.election_id = e.id) AS voters_count,
             (SELECT COUNT(*) FROM ballots b WHERE b.election_id = e.id) AS ballots_count
      FROM elections e
-     WHERE e.title = ANY($1::text[])
      ORDER BY e.created_at DESC`,
-    [FIXED_SYSTEM_ELECTIONS.map((item) => item.title)],
   );
 
   return result.rows.map(mapElectionRow);

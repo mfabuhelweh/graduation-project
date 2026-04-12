@@ -22,7 +22,17 @@ export async function patchVoter(req: Request, res: Response) {
 }
 
 export async function postFaceVerification(req: Request, res: Response) {
-  const result = await verifyFaceAndIssueToken(req.body, req.user?.email || req.user?.uid);
+  if (req.user?.role !== 'voter' || !req.user.nationalId || !req.user.electionId) {
+    return res.status(403).json({success: false, message: 'Voter authentication is required for face verification'});
+  }
+
+  const requestedElectionId = String(req.body?.electionId || '');
+  const requestedNationalId = String(req.body?.nationalId || '');
+  if (requestedElectionId !== req.user.electionId || requestedNationalId !== req.user.nationalId) {
+    return res.status(403).json({success: false, message: 'You can only verify your own voter identity'});
+  }
+
+  const result = await verifyFaceAndIssueToken(req.body, req.user, req.user.email || req.user.uid);
   if (!result.success) {
     return res.status(403).json({success: false, message: result.message || 'Face verification failed', data: result});
   }
