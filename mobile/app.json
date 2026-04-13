@@ -1,0 +1,29 @@
+{
+  "expo": {
+    "name": "VoteSecure Voter",
+    "slug": "vote-secure-voter",
+    "version": "1.0.0",
+    "scheme": "votesecure-voter",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "plugins": [
+      "expo-router",
+      "expo-secure-store"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "android": {
+      "package": "com.graduationproject.votesecurevoter"
+    },
+    "ios": {
+      "bundleIdentifier": "com.graduationproject.votesecurevoter"
+    },
+    "web": {
+      "bundler": "metro"
+    }
+  }
+}

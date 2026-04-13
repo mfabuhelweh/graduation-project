@@ -6,6 +6,7 @@ import { query, usePostgres, withTransaction } from '../db/pool.js';
 import type { AuthenticatedUser } from '../middleware/authMiddleware.js';
 import type { Voter } from '../models/voter.model.js';
 import { addAuditLog } from './audit.service.js';
+import { isElectionActiveForVoting } from '../utils/electionState.js';
 import { createOpaqueToken, hashToken } from '../utils/token.js';
 
 const collection = adminDb.collection('voters');
@@ -73,6 +74,61 @@ export async function getVoterByNationalId(nationalId: string, electionId?: stri
   if (snapshot.empty) return null;
   const doc = snapshot.docs[0];
   return { id: doc.id, ...doc.data() };
+}
+
+export async function getCurrentVoterProfile(authenticatedUser: AuthenticatedUser) {
+  if (
+    authenticatedUser.role !== "voter" ||
+    !authenticatedUser.nationalId ||
+    !authenticatedUser.electionId
+  ) {
+    throw new Error("Voter authentication is required");
+  }
+
+  if (!usePostgres) {
+    const fallback = await getVoterByNationalId(
+      authenticatedUser.nationalId,
+      authenticatedUser.electionId
+    );
+    if (!fallback) return null;
+
+    return {
+      ...fallback,
+      role: "voter",
+      email: fallback.email || authenticatedUser.email || "",
+      uid: authenticatedUser.uid,
+      electionTitle: undefined,
+      districtName: undefined,
+      districtCode: undefined
+    };
+  }
+
+  const result = await query(
+    `SELECT v.*,
+            d.name AS district_name,
+            d.code AS district_code,
+            e.title AS election_title
+     FROM voters v
+     JOIN districts d ON d.id = v.district_id
+     JOIN elections e ON e.id = v.election_id
+     WHERE v.election_id = $1
+       AND v.national_id = $2
+     LIMIT 1`,
+    [authenticatedUser.electionId, authenticatedUser.nationalId]
+  );
+
+  const row = result.rows[0];
+  if (!row) return null;
+
+  return {
+    ...mapVoterRow(row),
+    uid: authenticatedUser.uid,
+    role: "voter",
+    email: row.email || authenticatedUser.email || "",
+    districtName: row.district_name,
+    districtCode: row.district_code,
+    electionTitle: row.election_title
+  };
 }
 
 export async function createVoter(data: Voter, actor = 'system') {
@@ -257,6 +313,8 @@ export async function verifyFaceAndIssueToken(
     const voterResult = await client.query(
       `SELECT v.*,
               e.status AS election_status,
+              e.start_at,
+              e.end_at,
               d.name AS district_name,
               d.code AS district_code,
               d.seats_count
@@ -270,7 +328,15 @@ export async function verifyFaceAndIssueToken(
     const voter = voterResult.rows[0];
 
     if (!voter) throw new Error('Voter is not registered');
-    if (voter.election_status !== 'active') throw new Error('Election is not active');
+    if (
+      !isElectionActiveForVoting({
+        status: voter.election_status,
+        startAt: voter.start_at,
+        endAt: voter.end_at,
+      })
+    ) {
+      throw new Error('Election is not active');
+    }
     if (voter.status === 'blocked') throw new Error('Voter is blocked');
     if (voter.has_voted) throw new Error('Voter has already voted');
 

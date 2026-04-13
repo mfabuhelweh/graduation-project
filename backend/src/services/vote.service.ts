@@ -4,6 +4,7 @@ import { env } from '../config/env.js';
 import { createId, memoryStore } from '../data/memoryStore.js';
 import { query, usePostgres, withTransaction } from '../db/pool.js';
 import type { VotePayload } from '../models/vote.model.js';
+import { isElectionActiveForVoting } from '../utils/electionState.js';
 import { createBallotReference, hashToken } from '../utils/token.js';
 import { addAuditLog } from './audit.service.js';
 import { getElection, listElections } from './election.service.js';
@@ -19,6 +20,8 @@ async function resolveElection(electionId?: string) {
       `SELECT id
        FROM elections
        WHERE status = 'active'
+         AND (start_at IS NULL OR start_at <= now())
+         AND (end_at IS NULL OR end_at >= now())
        ORDER BY start_at ASC NULLS LAST, created_at DESC
        LIMIT 1`,
     );
@@ -51,6 +54,9 @@ export async function castVote(payload: VotePayload, actorUid?: string) {
   const election = await resolveElection(payload.electionId);
   if (!election) {
     throw new Error('Election not found');
+  }
+  if (!isElectionActiveForVoting(election as any)) {
+    throw new Error('Election is not active');
   }
   const electionId = (election as any).id;
 
@@ -142,6 +148,8 @@ export async function castVote(payload: VotePayload, actorUid?: string) {
               v.status AS voter_status,
               v.verified_face,
               e.status AS election_status,
+              e.start_at,
+              e.end_at,
               e.district_candidate_selection_count,
               d.seats_count
        FROM voting_tokens vt
@@ -166,7 +174,15 @@ export async function castVote(payload: VotePayload, actorUid?: string) {
       );
       throw new Error('Expired token');
     }
-    if (tokenRow.election_status !== 'active') throw new Error('Election is not active');
+    if (
+      !isElectionActiveForVoting({
+        status: tokenRow.election_status,
+        startAt: tokenRow.start_at,
+        endAt: tokenRow.end_at,
+      })
+    ) {
+      throw new Error('Election is not active');
+    }
     if (tokenRow.has_voted || tokenRow.voter_status === 'voted') throw new Error('Voter has already voted');
     if (!tokenRow.verified_face) throw new Error('Face verification is required before voting');
     if (tokenRow.national_id !== payload.voterNationalId) {

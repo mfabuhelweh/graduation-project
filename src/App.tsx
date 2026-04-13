@@ -11,6 +11,7 @@ import {
   Users,
   Vote,
 } from 'lucide-react';
+import { Capacitor } from '@capacitor/core';
 import { AnimatePresence, motion } from 'motion/react';
 import { cn } from './lib/utils';
 import {
@@ -23,7 +24,10 @@ import {
   loginWithBackend,
 } from './lib/api';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { MobileBottomNav } from './components/layout/MobileBottomNav';
+import { MobileMoreSheet } from './components/layout/MobileMoreSheet';
 import { SidebarItem } from './components/layout/SidebarItem';
+import { useMobileShell } from './hooks/useMobileShell';
 import { Dashboard } from './pages/Dashboard';
 import { Results } from './pages/Results';
 import { AuditLogs } from './pages/AuditLogs';
@@ -57,8 +61,13 @@ export default function App() {
   const [dbElections, setDbElections] = React.useState<any[]>([]);
   const [selectedElectionId, setSelectedElectionId] = React.useState<string | null>(null);
   const [toast, setToast] = React.useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const mobileShell = useMobileShell();
+  const [moreOpen, setMoreOpen] = React.useState(false);
 
   const isAdmin = userProfile?.role === 'admin';
+  /** Admin UI is web-only; Capacitor/Android uses Sanad (voter) flow only. */
+  const isNativeApp = Capacitor.isNativePlatform();
+  const showAdminShell = Boolean(isAdmin && !isNativeApp);
   const selectedElection = dbElections.find((election) => election.id === selectedElectionId) || null;
   const voterBoundElection =
     (!isAdmin && userProfile?.electionId
@@ -79,6 +88,14 @@ export default function App() {
         }
 
         const profile = await fetchMe();
+        if (Capacitor.isNativePlatform() && profile.role === 'admin') {
+          clearAuthToken();
+          setLoginError(
+            'إدارة النظام من الموقع على المتصفح فقط. استخدم هذا التطبيق للدخول كناخب عبر سند.',
+          );
+          setIsAuthReady(true);
+          return;
+        }
         const normalized = {
           uid: profile.uid,
           displayName: profile.fullName || profile.email || 'User',
@@ -148,6 +165,13 @@ export default function App() {
       setIsLoginLoading(true);
       setLoginError(null);
       const result = await loginWithBackend(email, password);
+      if (Capacitor.isNativePlatform() && result.user.role === 'admin') {
+        clearAuthToken();
+        setLoginError(
+          'إدارة النظام من الموقع على المتصفح فقط. سجّل الدخول كناخب عبر سند من هذا التطبيق.',
+        );
+        return;
+      }
       applyAuthenticatedUser(result);
     } catch (error) {
       setLoginError(error instanceof Error ? error.message : 'Admin login failed');
@@ -161,7 +185,7 @@ export default function App() {
     clearAuthToken();
     setUser(null);
     setUserProfile(null);
-    setActiveTab('Dashboard');
+    setActiveTab(Capacitor.isNativePlatform() ? 'Voting' : 'Dashboard');
   };
 
   if (!isAuthReady) {
@@ -187,7 +211,7 @@ export default function App() {
     );
   }
 
-  const sidebarItems = isAdmin
+  const sidebarItems = showAdminShell
     ? [
         { key: 'Dashboard', label: language === 'ar' ? 'لوحة التحكم' : 'Dashboard', icon: LayoutDashboard },
         { key: 'Elections', label: language === 'ar' ? 'الانتخابات' : 'Elections', icon: FileText },
@@ -200,10 +224,57 @@ export default function App() {
         { key: 'Notifications', label: language === 'ar' ? 'الإشعارات' : 'Notifications', icon: Bell },
       ];
 
+  const mappedTab: Tab =
+    showAdminShell && (activeTab === 'Create Election' || activeTab === 'Election Details')
+      ? 'Elections'
+      : activeTab;
+
+  const voterPrimaryTabs: Tab[] = ['Voting', 'Results', 'Notifications'];
+  const adminPrimaryTabs: Tab[] = ['Dashboard', 'Elections', 'Results', 'Audit Logs'];
+  const primaryTabs = showAdminShell ? adminPrimaryTabs : voterPrimaryTabs;
+  const isPrimaryView = primaryTabs.includes(mappedTab);
+
+  const mobileNavItems = primaryTabs.map((tabKey) => {
+    const def = sidebarItems.find((s) => s.key === tabKey)!;
+    return { key: tabKey, label: def.label, icon: def.icon };
+  });
+
+  const moreSheetItems = showAdminShell
+    ? [
+        {
+          key: 'settings',
+          label: language === 'ar' ? 'الإعدادات' : 'Settings',
+          icon: SettingsIcon,
+          onClick: () => setActiveTab('Settings'),
+        },
+        {
+          key: 'notifications',
+          label: language === 'ar' ? 'الإشعارات' : 'Notifications',
+          icon: Bell,
+          onClick: () => setActiveTab('Notifications'),
+        },
+      ]
+    : [
+        {
+          key: 'settings',
+          label: language === 'ar' ? 'الإعدادات' : 'Settings',
+          icon: SettingsIcon,
+          onClick: () => setActiveTab('Settings'),
+        },
+      ];
+
   return (
     <ErrorBoundary>
-      <div className="flex min-h-screen bg-slate-50" dir={language === 'ar' ? 'rtl' : 'ltr'}>
-        <aside className="flex w-72 flex-col border-l border-slate-200 bg-white">
+      <div
+        className="flex min-h-dvh flex-col bg-slate-50 md:min-h-screen md:flex-row"
+        dir={language === 'ar' ? 'rtl' : 'ltr'}
+      >
+        <aside
+          className={cn(
+            'flex w-72 shrink-0 flex-col border-slate-200 bg-white md:border-l',
+            mobileShell ? 'hidden' : 'hidden md:flex',
+          )}
+        >
           <div className="flex items-center gap-3 border-b border-slate-100 p-6">
             <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-600 text-white shadow-lg shadow-blue-200">
               <ShieldCheck className="h-6 w-6" />
@@ -234,7 +305,7 @@ export default function App() {
                 active={activeTab === 'Settings'}
                 onClick={() => setActiveTab('Settings')}
               />
-              {isAdmin && (
+              {showAdminShell && (
                 <SidebarItem
                   icon={Bell}
                   label={language === 'ar' ? 'الإشعارات' : 'Notifications'}
@@ -249,7 +320,7 @@ export default function App() {
             <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4 text-right">
               <p className="font-black text-slate-900">{user.displayName}</p>
               <p className="mt-1 text-xs text-slate-500">
-                {isAdmin ? (language === 'ar' ? 'مسؤول النظام' : 'System Admin') : language === 'ar' ? 'ناخب مسجل' : 'Registered Voter'}
+                {showAdminShell ? (language === 'ar' ? 'مسؤول النظام' : 'System Admin') : language === 'ar' ? 'ناخب مسجل' : 'Registered Voter'}
               </p>
             </div>
             <button
@@ -262,16 +333,36 @@ export default function App() {
           </div>
         </aside>
 
-        <main className="flex-1">
-          <header className="flex items-center justify-between border-b border-slate-200 bg-white px-8 py-5">
+        <main
+          className={cn(
+            'flex min-h-0 flex-1 flex-col',
+            mobileShell && 'pb-[calc(3.5rem+max(0.75rem,env(safe-area-inset-bottom)))]',
+          )}
+        >
+          <header
+            className={cn(
+              'sticky top-0 z-30 flex items-center justify-between border-b border-slate-200 bg-white/95 backdrop-blur-md',
+              mobileShell
+                ? 'px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))]'
+                : 'px-8 py-5',
+            )}
+          >
             <button
               onClick={() => setLanguage(language === 'ar' ? 'en' : 'ar')}
-              className="rounded-xl bg-slate-100 px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-200"
+              className={cn(
+                'rounded-xl bg-slate-100 font-bold text-slate-700 hover:bg-slate-200',
+                mobileShell ? 'px-3 py-2 text-xs' : 'px-4 py-2 text-sm',
+              )}
             >
               {language === 'ar' ? 'English' : 'العربية'}
             </button>
-            <div className="text-right">
-              <h2 className="text-xl font-black text-slate-900">
+            <div className={cn('min-w-0', language === 'ar' ? 'text-right' : 'text-left')}>
+              <h2
+                className={cn(
+                  'truncate font-black text-slate-900',
+                  mobileShell ? 'max-w-[65vw] text-base' : 'text-xl',
+                )}
+              >
                 {{
                   Dashboard: language === 'ar' ? 'لوحة التحكم' : 'Dashboard',
                   Elections: language === 'ar' ? 'الانتخابات' : 'Elections',
@@ -284,13 +375,13 @@ export default function App() {
                   Notifications: language === 'ar' ? 'الإشعارات' : 'Notifications',
                 }[activeTab]}
               </h2>
-              <p className="text-xs font-bold text-emerald-600">
+              <p className="text-[10px] font-bold text-emerald-600 md:text-xs">
                 {language === 'ar' ? 'متصل بالنظام' : 'Connected'}
               </p>
             </div>
           </header>
 
-          <div className="p-8">
+          <div className={cn('flex-1', mobileShell ? 'overflow-y-auto p-4' : 'p-8')}>
             <AnimatePresence>
               {toast && (
                 <motion.div
@@ -307,7 +398,7 @@ export default function App() {
               )}
             </AnimatePresence>
 
-            {activeTab === 'Dashboard' && (
+            {showAdminShell && activeTab === 'Dashboard' && (
               <Dashboard
                 onReset={async () => {}}
                 onRefresh={loadElections}
@@ -319,7 +410,7 @@ export default function App() {
               />
             )}
 
-            {activeTab === 'Elections' && (
+            {showAdminShell && activeTab === 'Elections' && (
               <ElectionsPage
                 elections={dbElections}
                 language={language}
@@ -336,7 +427,7 @@ export default function App() {
               />
             )}
 
-            {activeTab === 'Create Election' && (
+            {showAdminShell && activeTab === 'Create Election' && (
               <CreateElectionPage
                 setToast={setToast}
                 onCancel={() => setActiveTab('Elections')}
@@ -349,7 +440,7 @@ export default function App() {
               />
             )}
 
-            {activeTab === 'Election Details' && selectedElectionId && (
+            {showAdminShell && activeTab === 'Election Details' && selectedElectionId && (
               <ElectionDetailsPage
                 electionId={selectedElectionId}
                 setToast={setToast}
@@ -382,21 +473,44 @@ export default function App() {
 
             {activeTab === 'Results' && (
               <Results
-                isAdmin={isAdmin}
+                isAdmin={showAdminShell}
                 setToast={setToast}
                 language={language}
                 elections={dbElections}
-                preferredElectionId={!isAdmin ? activeVotingElection?.id : null}
+                preferredElectionId={!showAdminShell ? activeVotingElection?.id : null}
               />
             )}
 
-            {activeTab === 'Audit Logs' && <AuditLogs setToast={setToast} language={language} />}
+            {showAdminShell && activeTab === 'Audit Logs' && <AuditLogs setToast={setToast} language={language} />}
             {activeTab === 'Settings' && (
               <Settings setToast={setToast} language={language} userProfile={userProfile} setUserProfile={setUserProfile} />
             )}
             {activeTab === 'Notifications' && <Notifications language={language} />}
           </div>
         </main>
+
+        {mobileShell && (
+          <>
+            <MobileBottomNav
+              items={mobileNavItems}
+              activeItemKey={isPrimaryView ? mappedTab : null}
+              moreActive={!isPrimaryView}
+              onSelect={(key) => setActiveTab(key as Tab)}
+              onOpenMore={() => setMoreOpen(true)}
+              moreLabel={language === 'ar' ? 'المزيد' : 'More'}
+              dir={language === 'ar' ? 'rtl' : 'ltr'}
+            />
+            <MobileMoreSheet
+              open={moreOpen}
+              onClose={() => setMoreOpen(false)}
+              title={language === 'ar' ? 'المزيد' : 'More'}
+              items={moreSheetItems}
+              logoutLabel={language === 'ar' ? 'تسجيل الخروج' : 'Logout'}
+              onLogout={handleLogout}
+              dir={language === 'ar' ? 'rtl' : 'ltr'}
+            />
+          </>
+        )}
       </div>
     </ErrorBoundary>
   );

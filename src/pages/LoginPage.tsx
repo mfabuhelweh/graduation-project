@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { Capacitor } from '@capacitor/core';
 import { CheckCircle2, Loader2, LockKeyhole, ShieldCheck, Smartphone } from 'lucide-react';
 import { startSanadLogin, verifySanadOtp } from '../lib/api';
 
@@ -51,6 +52,7 @@ function SanadLogo() {
 }
 
 export const LoginPage = ({ onSanadComplete, onAdminLogin, isLoading, error }: LoginPageProps) => {
+  const voterAppOnly = Capacitor.isNativePlatform();
   const [mode, setMode] = React.useState<'sanad' | 'admin'>('sanad');
   const [localError, setLocalError] = React.useState<string | null>(null);
   const [formMessage, setFormMessage] = React.useState<string | null>(null);
@@ -165,46 +167,57 @@ export const LoginPage = ({ onSanadComplete, onAdminLogin, isLoading, error }: L
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#f5f7f6] px-4 py-8" dir="rtl">
+    <div
+      className={`flex min-h-dvh items-center justify-center bg-[#f5f7f6] px-4 py-8 ${
+        voterAppOnly ? 'pt-[max(1.25rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]' : ''
+      }`}
+      dir="rtl"
+    >
       <div className="w-full max-w-2xl rounded-[32px] bg-white px-6 py-8 shadow-[0_24px_80px_rgba(15,23,42,0.08)] sm:px-10">
         <SanadLogo />
 
-        <div className="mt-6 flex justify-center">
-          <div className="inline-flex rounded-2xl bg-slate-100 p-1">
-            <button
-              type="button"
-              onClick={() => {
-                setMode('sanad');
-                clearMessages();
-              }}
-              className={`rounded-2xl px-5 py-3 text-sm font-black transition ${
+        {voterAppOnly ? (
+          <p className="mt-4 text-center text-sm font-bold text-slate-600">
+            تطبيق الناخب — سجّل الدخول عبر سند. إدارة النظام من الموقع على المتصفح.
+          </p>
+        ) : (
+          <div className="mt-6 flex justify-center">
+            <div className="inline-flex rounded-2xl bg-slate-100 p-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setMode('sanad');
+                  clearMessages();
+                }}
+              className={`min-h-11 touch-manipulation rounded-2xl px-4 py-3 text-sm font-black transition active:opacity-90 sm:px-5 ${
                 mode === 'sanad' ? 'bg-[#238b84] text-white shadow-sm' : 'text-slate-600'
               }`}
-            >
-              الدخول عبر سند
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setMode('admin');
-                clearMessages();
-              }}
-              className={`rounded-2xl px-5 py-3 text-sm font-black transition ${
+              >
+                الدخول عبر سند
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setMode('admin');
+                  clearMessages();
+                }}
+              className={`min-h-11 touch-manipulation rounded-2xl px-4 py-3 text-sm font-black transition active:opacity-90 sm:px-5 ${
                 mode === 'admin' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-600'
               }`}
-            >
-              دخول الأدمن
-            </button>
+              >
+                دخول الأدمن
+              </button>
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="mt-8 rounded-[28px] bg-[#f8fbfa] p-5 sm:p-7">
           <div className="mb-6 text-center">
             <h1 className="text-2xl font-black text-slate-900">
-              {mode === 'sanad' ? 'تسجيل الدخول الموحد' : 'دخول المسؤول'}
+              {voterAppOnly || mode === 'sanad' ? 'تسجيل الدخول الموحد' : 'دخول المسؤول'}
             </h1>
             <p className="mt-2 text-sm leading-7 text-slate-500">
-              {mode === 'sanad'
+              {voterAppOnly || mode === 'sanad'
                 ? 'الدخول إلى النظام يتم افتراضيًا عبر سند للتحقق من الهوية بشكل آمن ومباشر.'
                 : 'هذا المدخل مخصص فقط لمسؤولي النظام باستخدام البريد الإلكتروني وكلمة المرور.'}
             </p>
@@ -222,7 +235,7 @@ export const LoginPage = ({ onSanadComplete, onAdminLogin, isLoading, error }: L
             </div>
           )}
 
-          {mode === 'admin' && (
+          {!voterAppOnly && mode === 'admin' && (
             <div className="space-y-5">
               <div>
                 <label className="mb-2 block text-right text-sm font-bold text-slate-700">البريد الإلكتروني</label>
@@ -258,7 +271,7 @@ export const LoginPage = ({ onSanadComplete, onAdminLogin, isLoading, error }: L
                 type="button"
                 onClick={handleAdminSubmit}
                 disabled={isLoading}
-                className="flex w-full items-center justify-center gap-3 rounded-2xl bg-slate-900 px-5 py-4 text-base font-black text-white transition hover:bg-slate-800 disabled:opacity-60"
+                className="flex min-h-12 w-full touch-manipulation items-center justify-center gap-3 rounded-2xl bg-slate-900 px-5 py-4 text-base font-black text-white transition hover:bg-slate-800 active:opacity-90 disabled:opacity-60"
               >
                 {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <ShieldCheck className="h-5 w-5" />}
                 <span>دخول الأدمن</span>
@@ -291,7 +304,7 @@ export const LoginPage = ({ onSanadComplete, onAdminLogin, isLoading, error }: L
                 type="button"
                 onClick={handleSanadStart}
                 disabled={sanadLoading}
-                className="flex w-full items-center justify-center gap-3 rounded-2xl bg-[#238b84] px-5 py-4 text-base font-black text-white transition hover:bg-[#1f7c76] disabled:opacity-60"
+                className="flex min-h-12 w-full touch-manipulation items-center justify-center gap-3 rounded-2xl bg-[#238b84] px-5 py-4 text-base font-black text-white transition hover:bg-[#1f7c76] active:opacity-90 disabled:opacity-60"
               >
                 {sanadLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Smartphone className="h-5 w-5" />}
                 <span>الدخول الموحد</span>
@@ -333,7 +346,7 @@ export const LoginPage = ({ onSanadComplete, onAdminLogin, isLoading, error }: L
                 type="button"
                 onClick={handleSanadVerifyOtp}
                 disabled={sanadLoading}
-                className="flex w-full items-center justify-center gap-3 rounded-2xl bg-[#238b84] px-5 py-4 text-base font-black text-white transition hover:bg-[#1f7c76] disabled:opacity-60"
+                className="flex min-h-12 w-full touch-manipulation items-center justify-center gap-3 rounded-2xl bg-[#238b84] px-5 py-4 text-base font-black text-white transition hover:bg-[#1f7c76] active:opacity-90 disabled:opacity-60"
               >
                 {sanadLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Smartphone className="h-5 w-5" />}
                 <span>متابعة عبر سند</span>
@@ -354,7 +367,7 @@ export const LoginPage = ({ onSanadComplete, onAdminLogin, isLoading, error }: L
                 </div>
               </div>
 
-              <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-white p-4">
+              <label className="flex min-h-12 cursor-pointer touch-manipulation items-start gap-3 rounded-2xl border border-slate-200 bg-white p-4 active:bg-slate-50">
                 <input
                   type="checkbox"
                   checked={sanadForm.consentAccepted}
@@ -365,7 +378,7 @@ export const LoginPage = ({ onSanadComplete, onAdminLogin, isLoading, error }: L
                     }));
                     clearMessages();
                   }}
-                  className="mt-1"
+                  className="mt-1 h-5 w-5 shrink-0 accent-[#238b84]"
                 />
                 <span className="text-right text-sm leading-7 text-slate-700">
                   أوافق على مشاركة بيانات الهوية الرقمية اللازمة مع النظام من أجل إتمام تسجيل الدخول فقط.
@@ -376,7 +389,7 @@ export const LoginPage = ({ onSanadComplete, onAdminLogin, isLoading, error }: L
                 type="button"
                 onClick={handleSanadComplete}
                 disabled={isLoading}
-                className="flex w-full items-center justify-center gap-3 rounded-2xl bg-[#238b84] px-5 py-4 text-base font-black text-white transition hover:bg-[#1f7c76] disabled:opacity-60"
+                className="flex min-h-12 w-full touch-manipulation items-center justify-center gap-3 rounded-2xl bg-[#238b84] px-5 py-4 text-base font-black text-white transition hover:bg-[#1f7c76] active:opacity-90 disabled:opacity-60"
               >
                 {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <LockKeyhole className="h-5 w-5" />}
                 <span>إكمال الدخول الموحد</span>

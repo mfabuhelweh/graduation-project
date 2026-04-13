@@ -3,6 +3,7 @@ import { env } from '../config/env.js';
 import { memoryStore } from '../data/memoryStore.js';
 import { query, usePostgres } from '../db/pool.js';
 import type { AuthenticatedUser } from '../middleware/authMiddleware.js';
+import { canExposeResults } from '../utils/electionState.js';
 
 async function getVoterDemographicsMetadata() {
   const columnsResult = await query<{ column_name: string }>(
@@ -28,6 +29,8 @@ function assertResultsVisibility(
   election:
     | {
         status?: string | null;
+        startAt?: string | null;
+        endAt?: string | null;
         allowResultsVisibilityBeforeClose?: boolean | null;
       }
     | undefined
@@ -42,11 +45,7 @@ function assertResultsVisibility(
     return election;
   }
 
-  if (election.status === 'closed' || election.status === 'archived') {
-    return election;
-  }
-
-  if (election.status === 'active' && election.allowResultsVisibilityBeforeClose) {
+  if (canExposeResults(election)) {
     return election;
   }
 
@@ -56,7 +55,12 @@ function assertResultsVisibility(
 async function assertResultsAccess(electionId: string, user?: AuthenticatedUser) {
   if (env.enableMemoryStore) {
     const election = memoryStore.elections.get(electionId) as
-      | { status?: string; allowResultsVisibilityBeforeClose?: boolean }
+      | {
+          status?: string;
+          startAt?: string;
+          endAt?: string;
+          allowResultsVisibilityBeforeClose?: boolean;
+        }
       | undefined;
     return assertResultsVisibility(election, user);
   }
@@ -66,6 +70,8 @@ async function assertResultsAccess(electionId: string, user?: AuthenticatedUser)
     const election = snapshot.exists
       ? {
           status: snapshot.get('status'),
+          startAt: snapshot.get('startAt'),
+          endAt: snapshot.get('endAt'),
           allowResultsVisibilityBeforeClose: snapshot.get('allowResultsVisibilityBeforeClose'),
         }
       : null;
@@ -74,9 +80,11 @@ async function assertResultsAccess(electionId: string, user?: AuthenticatedUser)
 
   const result = await query<{
     status: string;
+    start_at: string | null;
+    end_at: string | null;
     allow_results_visibility_before_close: boolean;
   }>(
-    `SELECT status, allow_results_visibility_before_close
+    `SELECT status, start_at, end_at, allow_results_visibility_before_close
      FROM elections
      WHERE id = $1
      LIMIT 1`,
@@ -87,6 +95,8 @@ async function assertResultsAccess(electionId: string, user?: AuthenticatedUser)
     result.rows[0]
       ? {
           status: result.rows[0].status,
+          startAt: result.rows[0].start_at,
+          endAt: result.rows[0].end_at,
           allowResultsVisibilityBeforeClose: result.rows[0].allow_results_visibility_before_close,
         }
       : null,

@@ -1,12 +1,35 @@
+import { Capacitor } from '@capacitor/core';
+
 const configuredApiBaseUrl = (import.meta.env.VITE_API_BASE_URL || '').trim();
 
 function normalizeApiBaseUrl(baseUrl: string) {
   return baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
 }
 
-const API_BASE_URL = normalizeApiBaseUrl(
-  import.meta.env.DEV ? '/api' : configuredApiBaseUrl || '/api',
-);
+/**
+ * - Vite dev: use `/api` so the dev-server proxy reaches the backend (see vite.config.ts).
+ * - Production web: use VITE_API_BASE_URL when set, otherwise same-origin `/api`.
+ * - Capacitor (Android/iOS): VITE_API_BASE_URL must be an absolute URL to your machine or server
+ *   (e.g. http://192.168.1.10:3215/api). Relative `/api` points at the WebView origin, not your PC.
+ */
+function resolveApiBaseUrl(): string {
+  if (import.meta.env.DEV) {
+    return normalizeApiBaseUrl('/api');
+  }
+
+  const configured = configuredApiBaseUrl ? normalizeApiBaseUrl(configuredApiBaseUrl) : '';
+  const native = Capacitor.isNativePlatform();
+
+  if (native && !configured) {
+    console.error(
+      '[api] VITE_API_BASE_URL is required for native builds. Example: http://192.168.1.10:3215/api',
+    );
+  }
+
+  return configured || normalizeApiBaseUrl('/api');
+}
+
+const API_BASE_URL = resolveApiBaseUrl();
 const DEV_AUTH_ENABLED = import.meta.env.DEV && import.meta.env.VITE_ENABLE_DEV_AUTH === 'true';
 
 const AUTH_TOKEN_KEY = 'vote_secure_auth_token';

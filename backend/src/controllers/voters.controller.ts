@@ -1,5 +1,5 @@
 import type {Request, Response} from 'express';
-import {createVoter, getVoterByNationalId, listVoters, updateVoter, verifyFaceAndIssueToken} from '../services/voter.service.js';
+import {createVoter, getCurrentVoterProfile, getVoterByNationalId, listVoters, updateVoter, verifyFaceAndIssueToken} from '../services/voter.service.js';
 
 export async function getVoters(_req: Request, res: Response) {
   res.json({success: true, data: await listVoters()});
@@ -9,6 +9,19 @@ export async function getVoter(req: Request, res: Response) {
   const voter = await getVoterByNationalId(req.params.nationalId);
   if (!voter) return res.status(404).json({success: false, message: 'Voter not found'});
   res.json({success: true, data: voter});
+}
+
+export async function getMyVoterProfile(req: Request, res: Response) {
+  if (!req.user) {
+    return res.status(401).json({ success: false, message: "Authentication is required" });
+  }
+
+  const voter = await getCurrentVoterProfile(req.user);
+  if (!voter) {
+    return res.status(404).json({ success: false, message: "Voter profile not found" });
+  }
+
+  res.json({ success: true, data: voter });
 }
 
 export async function postVoter(req: Request, res: Response) {

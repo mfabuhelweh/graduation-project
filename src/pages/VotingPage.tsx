@@ -172,82 +172,95 @@ export const VotingPage = ({
     }
   };
 
+  const actionRow = 'flex flex-col gap-3 md:flex-row md:items-center md:justify-between';
+  const btnBack =
+    'touch-manipulation min-h-12 w-full rounded-2xl border border-slate-200 px-5 py-3.5 text-base font-bold text-slate-700 hover:bg-slate-50 active:bg-slate-100 md:w-auto md:py-3 md:text-sm';
+  const btnPrimary =
+    'touch-manipulation inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#238b84] px-5 py-3.5 text-base font-black text-white hover:bg-[#1f7c76] active:opacity-90 disabled:opacity-60 md:w-auto md:py-3 md:text-sm';
+  const btnDanger =
+    'touch-manipulation inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-slate-900 px-5 py-3.5 text-base font-black text-white hover:bg-slate-800 active:opacity-90 disabled:opacity-60 md:w-auto md:py-3 md:text-sm';
+
   return (
-    <div className="mx-auto max-w-6xl space-y-6" dir="rtl">
-      <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          {progressSteps.map((label, index) => (
-            <div key={`${label}-${index}`} className="flex items-center gap-3">
-              <div
-                className={cn(
-                  'flex h-10 w-10 items-center justify-center rounded-full text-sm font-black',
-                  step > index
-                    ? 'bg-emerald-500 text-white'
-                    : step === index
-                      ? 'bg-[#238b84] text-white'
-                      : 'bg-slate-200 text-slate-500',
-                )}
-              >
-                {step > index ? <Check className="h-4 w-4" /> : index + 1}
+    <div className="mx-auto max-w-6xl space-y-4 md:space-y-6" dir="rtl">
+      <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm md:rounded-3xl md:p-5">
+        <div className="-mx-1 overflow-x-auto overscroll-x-contain pb-1 [-webkit-overflow-scrolling:touch]">
+          <div className="flex min-w-max items-center gap-3 px-1 md:flex-wrap md:gap-4">
+            {progressSteps.map((label, index) => (
+              <div key={`${label}-${index}`} className="flex shrink-0 items-center gap-2 md:gap-3">
+                <div
+                  className={cn(
+                    'flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-black md:h-10 md:w-10 md:text-sm',
+                    step > index
+                      ? 'bg-emerald-500 text-white'
+                      : step === index
+                        ? 'bg-[#238b84] text-white'
+                        : 'bg-slate-200 text-slate-500',
+                  )}
+                >
+                  {step > index ? <Check className="h-3.5 w-3.5 md:h-4 md:w-4" /> : index + 1}
+                </div>
+                <span className="max-w-[6.5rem] text-xs font-bold leading-tight text-slate-600 md:max-w-none md:text-sm">
+                  {label}
+                </span>
               </div>
-              <span className="text-sm font-bold text-slate-600">{label}</span>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       </div>
 
       {verificationMessage && (
-        <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4 text-right text-sm font-bold text-emerald-800">
+        <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4 text-right text-sm font-bold leading-relaxed text-emerald-800 md:text-sm">
           {verificationMessage}
         </div>
       )}
 
-      <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:rounded-3xl md:p-6">
         {step === 0 && (
           <div className="space-y-6 text-right">
-            <div className="rounded-[28px] bg-[linear-gradient(135deg,#238b84,#32b67a)] p-6 text-white">
-              <div className="flex items-start justify-between gap-4">
-                <div className="text-right">
-                  <p className="text-sm font-bold text-white/80">مرحبًا بك في التصويت الإلكتروني</p>
-                  <h2 className="mt-2 text-3xl font-black">{displayName}</h2>
-                  <p className="mt-3 text-sm leading-7 text-white/85">
+            <div className="rounded-2xl bg-[linear-gradient(135deg,#238b84,#32b67a)] p-4 text-white md:rounded-[28px] md:p-6">
+              <div className="flex items-start justify-between gap-3 md:gap-4">
+                <div className="min-w-0 text-right">
+                  <p className="text-xs font-bold text-white/80 md:text-sm">مرحبًا بك في التصويت الإلكتروني</p>
+                  <h2 className="mt-2 break-words text-2xl font-black md:text-3xl">{displayName}</h2>
+                  <p className="mt-3 text-xs leading-6 text-white/85 md:text-sm md:leading-7">
                     تم التعرف عليك من خلال حساب سند المرتبط بالرقم الوطني المستخدم في تسجيل الدخول.
                   </p>
                 </div>
-                <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/15">
-                  <BadgeCheck className="h-8 w-8" />
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white/15 md:h-16 md:w-16 md:rounded-2xl">
+                  <BadgeCheck className="h-7 w-7 md:h-8 md:w-8" />
                 </div>
               </div>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-3">
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+            <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 md:gap-4">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 md:p-5">
                 <p className="text-xs font-bold text-slate-400">الاسم المرتبط بسند</p>
-                <p className="mt-3 text-lg font-black text-slate-900">{displayName}</p>
+                <p className="mt-2 break-words text-base font-black text-slate-900 md:mt-3 md:text-lg">{displayName}</p>
               </div>
 
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 md:p-5">
                 <p className="text-xs font-bold text-slate-400">الرقم الوطني</p>
                 <input
                   value={nationalId}
                   maxLength={10}
                   disabled={lockNationalId}
                   onChange={(event) => setNationalId(event.target.value.replace(/\D/g, ''))}
-                  className="mt-2 w-full border-0 bg-transparent p-0 text-lg font-black tracking-[0.2em] text-slate-900 outline-none"
+                  className="mt-2 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-lg font-black tracking-[0.15em] text-slate-900 outline-none focus:border-[#238b84] disabled:bg-slate-100 md:border-0 md:bg-transparent md:p-0 md:tracking-[0.2em]"
                   dir="ltr"
                 />
               </div>
 
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:col-span-2 md:col-span-1 md:p-5">
                 <p className="text-xs font-bold text-slate-400">حالة الجلسة</p>
-                <p className="mt-3 text-lg font-black text-[#238b84]">موثقة عبر سند</p>
+                <p className="mt-2 text-base font-black text-[#238b84] md:mt-3 md:text-lg">موثقة عبر سند</p>
               </div>
             </div>
 
-            <div className="flex justify-end">
+            <div className="flex justify-stretch md:justify-end">
               <button
+                type="button"
                 onClick={() => setStep(1)}
-                className="rounded-2xl bg-[#238b84] px-5 py-3 text-sm font-black text-white hover:bg-[#1f7c76]"
+                className="touch-manipulation min-h-12 w-full rounded-2xl bg-[#238b84] px-5 py-3.5 text-base font-black text-white hover:bg-[#1f7c76] active:opacity-90 md:w-auto md:py-3 md:text-sm"
               >
                 متابعة إلى التحقق من الهوية
               </button>
@@ -258,18 +271,20 @@ export const VotingPage = ({
         {step === 1 && (
           <div className="space-y-6 text-right">
             <div className="flex items-center gap-3">
-              <Fingerprint className="h-6 w-6 text-[#238b84]" />
-              <h2 className="text-xl font-black text-slate-900">التحقق من الهوية</h2>
+              <Fingerprint className="h-7 w-7 shrink-0 text-[#238b84] md:h-6 md:w-6" />
+              <h2 className="text-lg font-black text-slate-900 md:text-xl">التحقق من الهوية</h2>
             </div>
 
-            <p className="text-sm leading-7 text-slate-500">
+            <p className="text-sm leading-7 text-slate-500 md:text-sm">
               سنستخدم في هذه الخطوة صورة الوجه التجريبية للمستخدم الحالي، ثم نقارنها مع صورة الوجه المرتبطة بسند لإتمام
               التحقق بشكل تجريبي.
             </p>
 
-            <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
-              <p className="text-sm font-black text-slate-900">صورة الوجه التي ستتم مقارنتها مع صورة الوجه في سند - وضع تجريبي</p>
-              <div className="mt-4 flex h-64 items-center justify-center rounded-3xl bg-white">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 md:rounded-3xl md:p-5">
+              <p className="text-sm font-black leading-snug text-slate-900">
+                صورة الوجه التي ستتم مقارنتها مع صورة الوجه في سند - وضع تجريبي
+              </p>
+              <div className="mt-4 flex h-52 items-center justify-center rounded-2xl bg-white md:h-64 md:rounded-3xl">
                 <div className="flex flex-col items-center gap-3 text-center">
                   <div className="flex h-28 w-28 items-center justify-center rounded-full bg-[linear-gradient(135deg,#238b84,#32b67a)] text-white shadow-lg">
                     <UserRound className="h-12 w-12" />
@@ -291,20 +306,18 @@ export const VotingPage = ({
               </div>
             )}
 
-            <div className="flex items-center justify-between">
-              <button
-                onClick={() => setStep(0)}
-                className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50"
-              >
+            <div className={actionRow}>
+              <button type="button" onClick={() => setStep(0)} className={btnBack}>
                 رجوع
               </button>
 
               <button
+                type="button"
                 onClick={handleSanadLinkedVerification}
                 disabled={isVerifying}
-                className="inline-flex items-center gap-2 rounded-2xl bg-[#238b84] px-5 py-3 text-sm font-black text-white hover:bg-[#1f7c76] disabled:opacity-60"
+                className={btnPrimary}
               >
-                {isVerifying ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                {isVerifying ? <Loader2 className="h-5 w-5 animate-spin" /> : <Sparkles className="h-5 w-5 md:h-4 md:w-4" />}
                 بدء التحقق التجريبي
               </button>
             </div>
@@ -312,30 +325,31 @@ export const VotingPage = ({
         )}
 
         {step === 2 && (
-          <div className="space-y-6 text-right">
+          <div className="space-y-5 text-right md:space-y-6">
             <div className="flex items-center gap-3">
-              <Vote className="h-6 w-6 text-[#238b84]" />
-              <h2 className="text-xl font-black text-slate-900">أولًا: التصويت للحزب الوطني</h2>
+              <Vote className="h-7 w-7 shrink-0 text-[#238b84] md:h-6 md:w-6" />
+              <h2 className="text-lg font-black leading-snug text-slate-900 md:text-xl">أولًا: التصويت للحزب الوطني</h2>
             </div>
-            <p className="text-sm text-slate-500">اختر حزبًا وطنيًا واحدًا فقط على مستوى المملكة.</p>
+            <p className="text-sm leading-relaxed text-slate-500">اختر حزبًا وطنيًا واحدًا فقط على مستوى المملكة.</p>
 
             {parties.length ? (
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:gap-4 xl:grid-cols-3">
                 {parties.map((party: any) => (
                   <button
+                    type="button"
                     key={party.id}
                     onClick={() => setSelectedParty(party.id)}
                     className={cn(
-                      'rounded-2xl border p-5 text-right transition-all',
+                      'touch-manipulation min-h-[4.5rem] rounded-2xl border p-4 text-right transition-all active:scale-[0.99] md:min-h-0 md:p-5',
                       selectedParty === party.id
                         ? 'border-[#238b84] bg-emerald-50 ring-2 ring-emerald-100'
                         : 'border-slate-200 bg-white hover:border-emerald-200',
                     )}
                   >
                     <div className="flex items-start justify-between gap-3">
-                      <div className="text-right">
-                        <h3 className="font-black text-slate-900">{party.name}</h3>
-                        <p className="mt-1 text-xs text-slate-500">
+                      <div className="min-w-0 text-right">
+                        <h3 className="text-base font-black text-slate-900 md:text-lg">{party.name}</h3>
+                        <p className="mt-1 text-xs leading-relaxed text-slate-500 md:text-xs">
                           {party.description || 'حزب وطني مشارك في هذه الانتخابات'}
                         </p>
                       </div>
@@ -349,17 +363,11 @@ export const VotingPage = ({
               </div>
             )}
 
-            <div className="flex items-center justify-between">
-              <button
-                onClick={() => setStep(1)}
-                className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50"
-              >
+            <div className={actionRow}>
+              <button type="button" onClick={() => setStep(1)} className={btnBack}>
                 رجوع
               </button>
-              <button
-                onClick={() => setStep(3)}
-                className="rounded-2xl bg-[#238b84] px-5 py-3 text-sm font-black text-white hover:bg-[#1f7c76]"
-              >
+              <button type="button" onClick={() => setStep(3)} className={btnPrimary}>
                 التالي: القائمة المحلية
               </button>
             </div>
@@ -367,31 +375,32 @@ export const VotingPage = ({
         )}
 
         {step === 3 && (
-          <div className="space-y-6 text-right">
+          <div className="space-y-5 text-right md:space-y-6">
             <div className="flex items-center gap-3">
-              <Vote className="h-6 w-6 text-[#238b84]" />
-              <h2 className="text-xl font-black text-slate-900">ثانيًا: اختيار القائمة المحلية</h2>
+              <Vote className="h-7 w-7 shrink-0 text-[#238b84] md:h-6 md:w-6" />
+              <h2 className="text-lg font-black leading-snug text-slate-900 md:text-xl">ثانيًا: اختيار القائمة المحلية</h2>
             </div>
-            <p className="text-sm text-slate-500">
+            <p className="text-sm leading-relaxed text-slate-500">
               تظهر هنا فقط القوائم التابعة لدائرتك: {ballotOptions?.voterDistrict?.name || 'غير محددة'}.
             </p>
 
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 md:gap-4">
               {districtLists.map((list: any) => (
                 <button
+                  type="button"
                   key={list.id}
                   onClick={() => {
                     setSelectedDistrictList(list.id);
                     setSelectedDistrictCandidates([]);
                   }}
                   className={cn(
-                    'rounded-2xl border p-5 text-right transition-all',
+                    'touch-manipulation min-h-[4.5rem] rounded-2xl border p-4 text-right transition-all active:scale-[0.99] md:min-h-0 md:p-5',
                     selectedDistrictList === list.id
                       ? 'border-[#238b84] bg-emerald-50 ring-2 ring-emerald-100'
                       : 'border-slate-200 bg-white hover:border-emerald-200',
                   )}
                 >
-                  <h3 className="font-black text-slate-900">{list.name}</h3>
+                  <h3 className="text-base font-black text-slate-900">{list.name}</h3>
                   <p className="mt-2 text-xs text-slate-500">{list.description || 'قائمة محلية ضمن دائرة الناخب'}</p>
                   <p className="mt-3 text-xs font-bold text-slate-400">
                     {list.districtName} - {list.candidates?.length || 0} مرشح
@@ -406,17 +415,11 @@ export const VotingPage = ({
               </div>
             )}
 
-            <div className="flex items-center justify-between">
-              <button
-                onClick={() => setStep(2)}
-                className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50"
-              >
+            <div className={actionRow}>
+              <button type="button" onClick={() => setStep(2)} className={btnBack}>
                 رجوع
               </button>
-              <button
-                onClick={() => setStep(4)}
-                className="rounded-2xl bg-[#238b84] px-5 py-3 text-sm font-black text-white hover:bg-[#1f7c76]"
-              >
+              <button type="button" onClick={() => setStep(4)} className={btnPrimary}>
                 التالي: مرشحو القائمة
               </button>
             </div>
@@ -424,33 +427,38 @@ export const VotingPage = ({
         )}
 
         {step === 4 && (
-          <div className="space-y-6 text-right">
+          <div className="space-y-5 text-right md:space-y-6">
             <div className="flex items-center gap-3">
-              <CheckCircle2 className="h-6 w-6 text-[#238b84]" />
-              <h2 className="text-xl font-black text-slate-900">ثالثًا: اختيار مرشحي القائمة المحلية</h2>
+              <CheckCircle2 className="h-7 w-7 shrink-0 text-[#238b84] md:h-6 md:w-6" />
+              <h2 className="text-lg font-black leading-snug text-slate-900 md:text-xl">
+                ثالثًا: اختيار مرشحي القائمة المحلية
+              </h2>
             </div>
-            <p className="text-sm text-slate-500">يمكنك اختيار {selectionLimit} مرشح كحد أقصى من نفس القائمة فقط.</p>
+            <p className="text-sm leading-relaxed text-slate-500">
+              يمكنك اختيار {selectionLimit} مرشح كحد أقصى من نفس القائمة فقط.
+            </p>
 
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm font-bold text-slate-700">
               القائمة المختارة: {selectedList?.name || 'لم يتم اختيار قائمة بعد'}
             </div>
 
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 md:gap-4">
               {(selectedList?.candidates || []).map((candidate: any) => {
                 const selected = selectedDistrictCandidates.includes(candidate.id);
                 return (
                   <button
+                    type="button"
                     key={candidate.id}
                     onClick={() => handleDistrictCandidateToggle(candidate.id)}
                     className={cn(
-                      'flex items-center justify-between gap-4 rounded-2xl border p-4 text-right transition-all',
+                      'flex min-h-[3.75rem] touch-manipulation items-center justify-between gap-4 rounded-2xl border p-4 text-right transition-all active:scale-[0.99]',
                       selected
                         ? 'border-[#238b84] bg-emerald-50 ring-2 ring-emerald-100'
                         : 'border-slate-200 bg-white hover:border-emerald-200',
                     )}
                   >
-                    <div className="text-right">
-                      <p className="font-black text-slate-900">{candidate.fullName}</p>
+                    <div className="min-w-0 text-right">
+                      <p className="text-base font-black text-slate-900">{candidate.fullName}</p>
                       <p className="mt-1 text-xs text-slate-500">
                         الترتيب {candidate.candidateOrder}
                         {candidate.candidateNumber ? ` - الرقم ${candidate.candidateNumber}` : ''}
@@ -458,11 +466,11 @@ export const VotingPage = ({
                     </div>
                     <div
                       className={cn(
-                        'flex h-8 w-8 items-center justify-center rounded-full border',
+                        'flex h-10 w-10 shrink-0 items-center justify-center rounded-full border text-sm font-black md:h-8 md:w-8 md:text-xs',
                         selected ? 'border-[#238b84] bg-[#238b84] text-white' : 'border-slate-300 text-slate-400',
                       )}
                     >
-                      {selected ? <Check className="h-4 w-4" /> : selectedDistrictCandidates.length + 1}
+                      {selected ? <Check className="h-5 w-5 md:h-4 md:w-4" /> : selectedDistrictCandidates.length + 1}
                     </div>
                   </button>
                 );
@@ -475,17 +483,11 @@ export const VotingPage = ({
               </div>
             )}
 
-            <div className="flex items-center justify-between">
-              <button
-                onClick={() => setStep(3)}
-                className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50"
-              >
+            <div className={actionRow}>
+              <button type="button" onClick={() => setStep(3)} className={btnBack}>
                 رجوع
               </button>
-              <button
-                onClick={() => setStep(5)}
-                className="rounded-2xl bg-[#238b84] px-5 py-3 text-sm font-black text-white hover:bg-[#1f7c76]"
-              >
+              <button type="button" onClick={() => setStep(5)} className={btnPrimary}>
                 مراجعة الاختيارات
               </button>
             </div>
@@ -493,37 +495,37 @@ export const VotingPage = ({
         )}
 
         {step === 5 && (
-          <div className="space-y-6 text-right">
+          <div className="space-y-5 text-right md:space-y-6">
             <div className="flex items-center gap-3">
-              <Shield className="h-6 w-6 text-[#238b84]" />
-              <h2 className="text-xl font-black text-slate-900">مراجعة نهائية قبل الإرسال</h2>
+              <Shield className="h-7 w-7 shrink-0 text-[#238b84] md:h-6 md:w-6" />
+              <h2 className="text-lg font-black text-slate-900 md:text-xl">مراجعة نهائية قبل الإرسال</h2>
             </div>
 
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4 md:gap-4">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 md:p-5">
                 <p className="text-xs font-bold text-slate-400">الناخب</p>
-                <p className="mt-3 font-black text-slate-900">{displayName}</p>
+                <p className="mt-2 break-words font-black text-slate-900 md:mt-3">{displayName}</p>
               </div>
 
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 md:p-5">
                 <p className="text-xs font-bold text-slate-400">الرقم الوطني</p>
-                <p className="mt-3 font-black text-slate-900">{nationalId}</p>
+                <p className="mt-2 font-black text-slate-900 md:mt-3">{nationalId}</p>
               </div>
 
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 md:p-5">
                 <p className="text-xs font-bold text-slate-400">الحزب الوطني</p>
-                <p className="mt-3 font-black text-slate-900">
+                <p className="mt-2 break-words font-black text-slate-900 md:mt-3">
                   {parties.find((party: any) => party.id === selectedParty)?.name || 'غير محدد'}
                 </p>
               </div>
 
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:col-span-2 md:col-span-1 md:p-5">
                 <p className="text-xs font-bold text-slate-400">القائمة المحلية</p>
-                <p className="mt-3 font-black text-slate-900">{selectedList?.name || 'غير محددة'}</p>
+                <p className="mt-2 break-words font-black text-slate-900 md:mt-3">{selectedList?.name || 'غير محددة'}</p>
               </div>
             </div>
 
-            <div className="rounded-2xl border border-slate-200 bg-white p-5">
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 md:p-5">
               <p className="text-xs font-bold text-slate-400">مرشحو القائمة المحلية المختارون</p>
               <div className="mt-3 space-y-2">
                 {(selectedList?.candidates || [])
@@ -531,7 +533,7 @@ export const VotingPage = ({
                   .map((candidate: any) => (
                     <div
                       key={candidate.id}
-                      className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700"
+                      className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3.5 text-sm font-bold leading-snug text-slate-700 md:py-3"
                     >
                       {candidate.fullName}
                     </div>
@@ -539,19 +541,12 @@ export const VotingPage = ({
               </div>
             </div>
 
-            <div className="flex items-center justify-between">
-              <button
-                onClick={() => setStep(4)}
-                className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50"
-              >
+            <div className={actionRow}>
+              <button type="button" onClick={() => setStep(4)} className={btnBack}>
                 رجوع
               </button>
-              <button
-                onClick={handleSubmitVote}
-                disabled={isSubmitting}
-                className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-5 py-3 text-sm font-black text-white hover:bg-slate-800 disabled:opacity-60"
-              >
-                {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+              <button type="button" onClick={handleSubmitVote} disabled={isSubmitting} className={btnDanger}>
+                {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : <CheckCircle2 className="h-5 w-5 md:h-4 md:w-4" />}
                 تأكيد وإرسال الصوت
               </button>
             </div>
@@ -559,12 +554,12 @@ export const VotingPage = ({
         )}
 
         {step === 6 && (
-          <div className="space-y-5 py-10 text-center">
-            <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-emerald-500 text-white">
-              <CheckCircle2 className="h-10 w-10" />
+          <div className="space-y-5 py-8 text-center md:py-10">
+            <div className="mx-auto flex h-[4.5rem] w-[4.5rem] items-center justify-center rounded-full bg-emerald-500 text-white md:h-20 md:w-20">
+              <CheckCircle2 className="h-11 w-11 md:h-10 md:w-10" />
             </div>
-            <h2 className="text-2xl font-black text-slate-900">تم تسجيل صوتك بنجاح</h2>
-            <p className="text-sm leading-7 text-slate-500">
+            <h2 className="text-xl font-black text-slate-900 md:text-2xl">تم تسجيل صوتك بنجاح</h2>
+            <p className="mx-auto max-w-md px-1 text-sm leading-7 text-slate-500">
               شكرًا {displayName}. تم حفظ الصوت بشكل مجهول وربط الجلسة فقط بمعاملة التصويت دون طلب الرقم الوطني منك مرة أخرى.
             </p>
           </div>

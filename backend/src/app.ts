@@ -8,6 +8,7 @@ import {authRoutes} from './routes/auth.routes.js';
 import {dashboardRoutes} from './routes/dashboard.routes.js';
 import {electionRoutes} from './routes/elections.routes.js';
 import {healthRoutes} from './routes/health.routes.js';
+import {notificationsRoutes} from './routes/notifications.routes.js';
 import {resultsRoutes} from './routes/results.routes.js';
 import {smsRoutes} from './routes/sms.routes.js';
 import {voterRoutes} from './routes/voters.routes.js';
@@ -58,6 +59,7 @@ export function createApp() {
   app.use('/api/voters', voterRoutes);
   app.use('/api/votes', voteRoutes);
   app.use('/api/results', resultsRoutes);
+  app.use('/api/notifications', notificationsRoutes);
   app.use('/api/audit', auditRoutes);
 
   app.use(errorHandler);
