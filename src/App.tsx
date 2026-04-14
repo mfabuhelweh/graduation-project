@@ -14,6 +14,7 @@ import {
 import { Capacitor } from '@capacitor/core';
 import { AnimatePresence, motion } from 'motion/react';
 import { cn } from './lib/utils';
+import { filterFixedElections } from './lib/fixedElections';
 import {
   castVote,
   clearAuthToken,
@@ -21,11 +22,10 @@ import {
   fetchElections,
   fetchMe,
   getAuthToken,
-  loginWithBackend,
+  loginAdminWithGoogleCredential,
 } from './lib/api';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { MobileBottomNav } from './components/layout/MobileBottomNav';
-import { MobileMoreSheet } from './components/layout/MobileMoreSheet';
 import { SidebarItem } from './components/layout/SidebarItem';
 import { useMobileShell } from './hooks/useMobileShell';
 import { Dashboard } from './pages/Dashboard';
@@ -52,7 +52,15 @@ type Tab =
 
 export default function App() {
   const [activeTab, setActiveTab] = React.useState<Tab>('Dashboard');
-  const [language, setLanguage] = React.useState<'ar' | 'en'>('ar');
+  const [language, setLanguage] = React.useState<'ar' | 'en'>(() => {
+    if (typeof window === 'undefined') return 'ar';
+    const storedLanguage = window.localStorage.getItem('votesecure-language');
+    return storedLanguage === 'en' ? 'en' : 'ar';
+  });
+  const [theme, setTheme] = React.useState<'light' | 'dark'>(() => {
+    if (typeof window === 'undefined') return 'light';
+    return window.localStorage.getItem('votesecure-theme') === 'dark' ? 'dark' : 'light';
+  });
   const [user, setUser] = React.useState<any | null>(null);
   const [userProfile, setUserProfile] = React.useState<any | null>(null);
   const [isAuthReady, setIsAuthReady] = React.useState(false);
@@ -62,7 +70,6 @@ export default function App() {
   const [selectedElectionId, setSelectedElectionId] = React.useState<string | null>(null);
   const [toast, setToast] = React.useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const mobileShell = useMobileShell();
-  const [moreOpen, setMoreOpen] = React.useState(false);
 
   const isAdmin = userProfile?.role === 'admin';
   /** Admin UI is web-only; Capacitor/Android uses Sanad (voter) flow only. */
@@ -79,6 +86,16 @@ export default function App() {
     dbElections[0];
 
   React.useEffect(() => {
+    if (typeof document === 'undefined') return;
+
+    document.documentElement.dataset.theme = theme;
+    document.documentElement.style.colorScheme = theme;
+    document.documentElement.lang = language;
+    window.localStorage.setItem('votesecure-theme', theme);
+    window.localStorage.setItem('votesecure-language', language);
+  }, [language, theme]);
+
+  React.useEffect(() => {
     const bootstrap = async () => {
       try {
         const token = getAuthToken();
@@ -91,7 +108,9 @@ export default function App() {
         if (Capacitor.isNativePlatform() && profile.role === 'admin') {
           clearAuthToken();
           setLoginError(
-            'إدارة النظام من الموقع على المتصفح فقط. استخدم هذا التطبيق للدخول كناخب عبر سند.',
+            language === 'ar'
+              ? 'إدارة النظام من الموقع على المتصفح فقط. استخدم هذا التطبيق للدخول كناخب عبر سند.'
+              : 'System admin is available only on the website. Use this app as a voter via SANAD.',
           );
           setIsAuthReady(true);
           return;
@@ -121,7 +140,7 @@ export default function App() {
 
   const loadElections = React.useCallback(async () => {
     const elections = await fetchElections();
-    setDbElections(elections);
+    setDbElections(filterFixedElections(elections));
   }, []);
 
   React.useEffect(() => {
@@ -160,21 +179,23 @@ export default function App() {
     }
   };
 
-  const handleAdminLogin = async (email: string, password: string) => {
+  const handleAdminGoogleLogin = async (credential: string) => {
     try {
       setIsLoginLoading(true);
       setLoginError(null);
-      const result = await loginWithBackend(email, password);
+      const result = await loginAdminWithGoogleCredential(credential);
       if (Capacitor.isNativePlatform() && result.user.role === 'admin') {
         clearAuthToken();
         setLoginError(
-          'إدارة النظام من الموقع على المتصفح فقط. سجّل الدخول كناخب عبر سند من هذا التطبيق.',
+          language === 'ar'
+            ? 'إدارة النظام من الموقع على المتصفح فقط. سجّل الدخول كناخب عبر سند من هذا التطبيق.'
+            : 'System admin is available only on the website. Sign in as a voter via SANAD in this app.',
         );
         return;
       }
       applyAuthenticatedUser(result);
     } catch (error) {
-      setLoginError(error instanceof Error ? error.message : 'Admin login failed');
+      setLoginError(error instanceof Error ? error.message : 'Admin Google login failed');
       throw error;
     } finally {
       setIsLoginLoading(false);
@@ -203,9 +224,10 @@ export default function App() {
       <ErrorBoundary>
         <LoginPage
           onSanadComplete={handleSanadComplete}
-          onAdminLogin={handleAdminLogin}
+          onAdminGoogleLogin={handleAdminGoogleLogin}
           isLoading={isLoginLoading}
           error={loginError}
+          language={language}
         />
       </ErrorBoundary>
     );
@@ -229,44 +251,26 @@ export default function App() {
       ? 'Elections'
       : activeTab;
 
-  const voterPrimaryTabs: Tab[] = ['Voting', 'Results', 'Notifications'];
-  const adminPrimaryTabs: Tab[] = ['Dashboard', 'Elections', 'Results', 'Audit Logs'];
+  const voterPrimaryTabs: Tab[] = ['Voting', 'Results', 'Notifications', 'Settings'];
+  const adminPrimaryTabs: Tab[] = ['Dashboard', 'Elections', 'Results', 'Settings'];
   const primaryTabs = showAdminShell ? adminPrimaryTabs : voterPrimaryTabs;
-  const isPrimaryView = primaryTabs.includes(mappedTab);
 
   const mobileNavItems = primaryTabs.map((tabKey) => {
-    const def = sidebarItems.find((s) => s.key === tabKey)!;
-    return { key: tabKey, label: def.label, icon: def.icon };
+    if (tabKey === 'Settings') {
+      return { key: tabKey, label: language === 'ar' ? 'الإعدادات' : 'Settings', icon: SettingsIcon };
+    }
+    const def = sidebarItems.find((s) => s.key === tabKey);
+    return {
+      key: tabKey,
+      label: def?.label || String(tabKey),
+      icon: def?.icon || SettingsIcon,
+    };
   });
-
-  const moreSheetItems = showAdminShell
-    ? [
-        {
-          key: 'settings',
-          label: language === 'ar' ? 'الإعدادات' : 'Settings',
-          icon: SettingsIcon,
-          onClick: () => setActiveTab('Settings'),
-        },
-        {
-          key: 'notifications',
-          label: language === 'ar' ? 'الإشعارات' : 'Notifications',
-          icon: Bell,
-          onClick: () => setActiveTab('Notifications'),
-        },
-      ]
-    : [
-        {
-          key: 'settings',
-          label: language === 'ar' ? 'الإعدادات' : 'Settings',
-          icon: SettingsIcon,
-          onClick: () => setActiveTab('Settings'),
-        },
-      ];
 
   return (
     <ErrorBoundary>
       <div
-        className="flex min-h-dvh flex-col bg-slate-50 md:min-h-screen md:flex-row"
+        className="app-shell flex min-h-dvh flex-col bg-slate-50 transition-[background-color,color,border-color] duration-300 md:min-h-screen md:flex-row"
         dir={language === 'ar' ? 'rtl' : 'ltr'}
       >
         <aside
@@ -437,6 +441,11 @@ export default function App() {
                   setSelectedElectionId(election.id);
                   setActiveTab('Elections');
                 }}
+                onDeleted={async () => {
+                  setSelectedElectionId(null);
+                  await loadElections();
+                  setActiveTab('Elections');
+                }}
               />
             )}
 
@@ -455,6 +464,7 @@ export default function App() {
                 initialNationalId={userProfile?.nationalId}
                 voterName={userProfile?.displayName || userProfile?.fullName}
                 lockNationalId={Boolean(userProfile?.nationalId)}
+                language={language}
                 onVoteComplete={async (payload) => {
                   await castVote({
                     electionId: activeVotingElection?.id,
@@ -483,33 +493,28 @@ export default function App() {
 
             {showAdminShell && activeTab === 'Audit Logs' && <AuditLogs setToast={setToast} language={language} />}
             {activeTab === 'Settings' && (
-              <Settings setToast={setToast} language={language} userProfile={userProfile} setUserProfile={setUserProfile} />
+              <Settings
+                setToast={setToast}
+                language={language}
+                setLanguage={setLanguage}
+                theme={theme}
+                setTheme={setTheme}
+                userProfile={userProfile}
+                setUserProfile={setUserProfile}
+                onLogout={handleLogout}
+              />
             )}
             {activeTab === 'Notifications' && <Notifications language={language} />}
           </div>
         </main>
 
         {mobileShell && (
-          <>
-            <MobileBottomNav
-              items={mobileNavItems}
-              activeItemKey={isPrimaryView ? mappedTab : null}
-              moreActive={!isPrimaryView}
-              onSelect={(key) => setActiveTab(key as Tab)}
-              onOpenMore={() => setMoreOpen(true)}
-              moreLabel={language === 'ar' ? 'المزيد' : 'More'}
-              dir={language === 'ar' ? 'rtl' : 'ltr'}
-            />
-            <MobileMoreSheet
-              open={moreOpen}
-              onClose={() => setMoreOpen(false)}
-              title={language === 'ar' ? 'المزيد' : 'More'}
-              items={moreSheetItems}
-              logoutLabel={language === 'ar' ? 'تسجيل الخروج' : 'Logout'}
-              onLogout={handleLogout}
-              dir={language === 'ar' ? 'rtl' : 'ltr'}
-            />
-          </>
+          <MobileBottomNav
+            items={mobileNavItems}
+            activeItemKey={primaryTabs.includes(mappedTab) ? mappedTab : null}
+            onSelect={(key) => setActiveTab(key as Tab)}
+            dir={language === 'ar' ? 'rtl' : 'ltr'}
+          />
         )}
       </div>
     </ErrorBoundary>

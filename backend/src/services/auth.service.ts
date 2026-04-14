@@ -3,6 +3,7 @@ import { createHash, randomInt } from 'node:crypto';
 import jwt from 'jsonwebtoken';
 import { OAuth2Client } from 'google-auth-library';
 import { env } from '../config/env.js';
+import { LOCAL_SYSTEM_ELECTION_TITLE } from '../constants/systemElections.js';
 import { query, withTransaction } from '../db/pool.js';
 
 export interface AuthTokenPayload {
@@ -171,6 +172,7 @@ async function findVoterForSanad(nationalId: string) {
      FROM voters v
      JOIN elections e ON e.id = v.election_id
      WHERE v.national_id = $1
+       AND e.title = $2
      ORDER BY
        CASE e.status
          WHEN 'active' THEN 0
@@ -180,7 +182,7 @@ async function findVoterForSanad(nationalId: string) {
        e.created_at DESC,
        v.created_at DESC
      LIMIT 1`,
-    [nationalId],
+    [nationalId, LOCAL_SYSTEM_ELECTION_TITLE],
   );
 
   return result.rows[0] || null;
@@ -228,8 +230,8 @@ export async function loginAdmin(email: string, password: string) {
 
 export async function loginByEmailPassword(email: string, password: string) {
   const admin = await findAdminByEmail(email);
-  if (admin && verifyPassword(password, admin.password_hash)) {
-    return buildAdminAuthResult(admin);
+  if (admin) {
+    throw new Error('Admin accounts must sign in with Google');
   }
 
   const voter = await findVoterByEmail(email);
@@ -395,6 +397,35 @@ export async function loginWithGoogle(credential: string) {
   }
 
   throw new Error('No account is linked to this Google email. Create an account first.');
+}
+
+export async function loginAdminWithGoogle(credential: string) {
+  const googlePayload = await verifyGoogleIdToken(credential);
+  const googleSub = googlePayload.sub;
+  const email = googlePayload.email.toLowerCase();
+
+  const adminByGoogle = await query<AdminRow>(
+    `SELECT id, email, full_name, role, password_hash, google_sub
+     FROM admins
+     WHERE google_sub = $1
+     LIMIT 1`,
+    [googleSub],
+  );
+  if (adminByGoogle.rows[0]) {
+    return buildAdminAuthResult(adminByGoogle.rows[0]);
+  }
+
+  const adminByEmail = await findAdminByEmail(email);
+  if (!adminByEmail) {
+    throw new Error('This Google account is not authorized for admin access');
+  }
+
+  if (!adminByEmail.google_sub) {
+    await query(`UPDATE admins SET google_sub = $2 WHERE id = $1`, [adminByEmail.id, googleSub]);
+    adminByEmail.google_sub = googleSub;
+  }
+
+  return buildAdminAuthResult(adminByEmail);
 }
 
 export async function startSanadLogin(nationalId: string) {

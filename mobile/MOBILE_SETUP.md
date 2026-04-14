@@ -1,122 +1,175 @@
-# VoteSecure Voter Mobile Setup
+# 📱 VoteSecure — تطبيق الناخبين (Android + iOS)
 
-## Overview
+تطبيق موبايل للناخبين مبني بـ **Expo React Native**، يدعم Android وiOS والويب من نفس الكود المصدري.
 
-This folder adds a dedicated Expo / React Native voter application without replacing the current PostgreSQL backend or the existing web admin panel.
+---
 
-The mobile app reuses the current backend JWT flow and the same election, voting, results, and voter data.
+## 🏗️ معمارية التطبيق
 
-## Current Integration Strategy
-
-- Backend: reuse the current Express + PostgreSQL API.
-- Admin panel: no rewrite required.
-- Mobile app: added under `/mobile`.
-- Authentication: uses `/api/auth/login` and `/api/auth/me`.
-- Voting: uses `/api/elections/:id/ballot`, `/api/voters/verify-face`, and `/api/votes`.
-- Results: uses `/api/results/:electionId`.
-
-## 1. Install Dependencies
-
-From the project root:
-
-```bash
-cd mobile
-npm install
+```
+mobile/
+├── app/
+│   ├── _layout.tsx          ← الـ Root Layout (Providers)
+│   ├── index.tsx            ← Redirect التلقائي
+│   ├── (auth)/
+│   │   └── login.tsx        ← تسجيل الدخول عبر سَنَد
+│   └── (voter)/
+│       ├── _layout.tsx      ← حماية الشاشات بـ Auth Guard
+│       ├── home.tsx         ← الصفحة الرئيسية (قائمة الانتخابات)
+│       ├── results.tsx      ← نتائج الانتخابات
+│       ├── notifications.tsx← الإشعارات
+│       ├── profile.tsx      ← الملف الشخصي
+│       ├── election/
+│       │   └── [id].tsx    ← تفاصيل انتخاب محدد
+│       └── vote/
+│           └── [id].tsx    ← شاشة التصويت الكاملة
+├── components/              ← مكونات واجهة مشتركة
+├── constants/               ← الألوان، الـ endpoints، الـ config
+├── hooks/                   ← React Hooks مخصصة
+├── services/                ← API + Auth + Storage
+├── store/                   ← Zustand (إدارة حالة المصادقة)
+├── types/                   ← TypeScript type definitions
+├── utils/                   ← دوال مساعدة
+└── assets/                  ← الأيقونات والـ Splash Screen
 ```
 
-## 2. Configure Environment Variables
+---
 
-Create a local `.env` file inside `/mobile`:
+## 🚀 تشغيل التطبيق
+
+### من مجلد `mobile/`:
+
+```bash
+# تثبيت الحزم (مرة واحدة)
+npm install
+
+# تشغيل على Android (يفتح Expo Go أو محاكي)
+npx expo start --android
+
+# تشغيل على iOS
+npx expo start --ios
+
+# تشغيل على الويب
+npx expo start --web
+
+# تشغيل Expo Dev Tools (اختر المنصة يدويًا)
+npx expo start
+```
+
+### من المجلد الجذر:
+
+```bash
+npm run mobile             # Expo Dev Tools
+npm run mobile:android     # تشغيل مباشر على Android
+npm run mobile:ios         # تشغيل مباشر على iOS
+npm run mobile:web         # تشغيل على الويب
+```
+
+---
+
+## 📡 إعداد عنوان الـ API
+
+عدّل ملف `mobile/.env` بحسب بيئتك:
 
 ```env
-EXPO_PUBLIC_API_BASE_URL=http://192.168.131.115:3215/api
+# للمحاكي Android (Android Emulator)
+EXPO_PUBLIC_API_BASE_URL=http://10.0.2.2:3215/api
+
+# للمحاكي iOS (iOS Simulator)
+EXPO_PUBLIC_API_BASE_URL=http://localhost:3215/api
+
+# للهاتف الحقيقي على نفس الشبكة
+EXPO_PUBLIC_API_BASE_URL=http://192.168.x.x:3215/api
 ```
 
-Use your machine LAN IP when testing on a physical phone.
+> ⚠️ **مهم:** الـ backend يجب أن يكون شغّالاً أولاً:
+> ```bash
+> npm run start:backend   # من المجلد الجذر
+> ```
 
-Examples:
+---
 
-- Android emulator with backend on host machine: `http://10.0.2.2:3215/api`
-- iOS simulator: `http://localhost:3215/api`
-- Physical device on same Wi-Fi: `http://192.168.131.115:3215/api`
+## 📦 بناء APK للأندرويد (للنشر أو التسليم)
 
-## 3. Start the Existing Backend
+### الطريقة 1: Expo Go (للاختبار السريع)
+1. حمّل **Expo Go** من Google Play
+2. شغّل `npx expo start` من داخل `mobile/`
+3. امسح الـ QR Code
 
-From the project root:
+### الطريقة 2: بناء APK محلي بـ EAS Build
 
 ```bash
-npm run start:backend
+# تثبيت EAS CLI (مرة واحدة)
+npm install -g eas-cli
+
+# تسجيل الدخول لـ Expo
+eas login
+
+# إنشاء ملف إعدادات EAS (مرة واحدة)
+eas build:configure
+
+# بناء APK للأندرويد
+eas build --platform android --profile preview
 ```
 
-Or during development:
+### الطريقة 3: بناء APK محلي (بدون EAS)
 
 ```bash
-npm run dev:backend
+# تحتاج Java JDK + Android SDK مثبتة
+npx expo run:android
 ```
 
-Make sure the backend is reachable from the device running Expo.
+---
 
-## 4. Run the Mobile App
+## 🔐 تدفق المصادقة
 
-From `/mobile`:
+```
+1. الناخب يدخل رقمه الوطني (10 أرقام)
+2. Backend يرسل OTP عبر سَنَد / SMS
+3. الناخب يدخل OTP (6 أرقام)
+4. الناخب يوافق على مشاركة البيانات
+5. Backend يُعيد JWT Token
+6. Token يُحفظ في expo-secure-store (آمن)
+7. التطبيق يحيّد الجلسة عند كل فتح
+```
+
+---
+
+## 📱 الشاشات والميزات
+
+| الشاشة | الميزات |
+|--------|---------|
+| 🔑 تسجيل الدخول | سَنَد + OTP بـ 3 مراحل، RTL كامل |
+| 🏠 الرئيسية | انتخابات نشطة + قادمة، Pull-to-Refresh |
+| 📋 تفاصيل الانتخاب | معلومات + زر الذهاب للتصويت |
+| 🗳️ التصويت | اختيار حزب + قائمة + مرشحين + تأكيد |
+| 📊 النتائج | إحصائيات الأحزاب والقوائم والمرشحين |
+| 🔔 الإشعارات | إشعارات الانتخابات |
+| 👤 الملف الشخصي | بيانات الناخب + تسجيل الخروج |
+
+---
+
+## 🛠️ التقنيات المستخدمة
+
+| التقنية | الغرض | الإصدار |
+|---------|-------|---------|
+| Expo | منصة React Native + بناء التطبيق | ~54 |
+| React Native | واجهة المستخدم | 0.81.5 |
+| Expo Router | التوجيه المبني على الملفات | ~6 |
+| expo-secure-store | تخزين JWT بأمان | ~15 |
+| Zustand | إدارة حالة المصادقة | ^5 |
+| TanStack Query | إدارة حالة الخادم | ^5 |
+| React Native Paper | مكونات Material Design | ^5 |
+| Axios | HTTP Client | ^1 |
+
+---
+
+## ✅ التحقق من الجودة
 
 ```bash
-npm run start
+# TypeScript typecheck (لا أخطاء)
+npm run typecheck
+
+# التأكد من عمل الـ API
+curl http://localhost:3215/api/health
 ```
-
-Then choose:
-
-- `a` for Android emulator
-- `i` for iOS simulator
-- Expo Go on a physical device by scanning the QR code
-
-## 5. Authentication Notes
-
-This mobile app follows the actual current backend direction:
-
-- It does not force a Firebase-first mobile auth flow.
-- It uses the backend login endpoint and stores the backend JWT securely.
-- Firebase can stay in the project for legacy web usage, but mobile is built around the backend JWT that already exists.
-
-## 6. RTL and Arabic
-
-The mobile UI is Arabic-first:
-
-- right-aligned text
-- RTL-friendly layout decisions
-- labels and flows written in Arabic
-
-If you later want full runtime language switching, add a lightweight i18n layer on top of the current text structure.
-
-## 7. Small Backend Compatibility Additions
-
-The mobile app is designed to work best with two additive endpoints:
-
-- `GET /api/voters/me`
-- `GET /api/notifications`
-
-If these are missing, profile currently falls back to the legacy `/api/voters/:nationalId` route when available.
-
-Notifications read/unread state is stored locally on the device unless the backend later adds persistence for it.
-
-## 8. Face Verification / Voting Token Note
-
-The existing backend requires a voting token before posting the final vote.
-
-Because of that, the mobile vote flow issues the token first through:
-
-- `POST /api/voters/verify-face`
-
-Then it submits the final ballot through:
-
-- `POST /api/votes`
-
-This preserves the current backend business rules instead of bypassing them.
-
-## 9. Recommended Next Step
-
-After verifying the app locally, the cleanest backend hardening step is:
-
-1. keep `/api/voters/me` as the safe profile endpoint for mobile
-2. keep `/api/notifications` as a lightweight voter notification feed
-3. later replace dev-mode face verification with the real production verification provider

@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
 import {
   completeSanadLogin,
+  loginAdminWithGoogle,
   loginByEmailPassword,
   loginWithGoogle,
   registerVoterAccount,
@@ -48,6 +49,16 @@ export async function postGoogleLogin(req: Request, res: Response) {
   }
 
   const result = await loginWithGoogle(credential);
+  res.json({ success: true, data: result });
+}
+
+export async function postAdminGoogleLogin(req: Request, res: Response) {
+  const { credential } = req.body || {};
+  if (!credential || typeof credential !== 'string') {
+    return res.status(400).json({ success: false, message: 'Google credential is required' });
+  }
+
+  const result = await loginAdminWithGoogle(credential);
   res.json({ success: true, data: result });
 }
 

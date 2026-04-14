@@ -12,56 +12,71 @@ interface NotificationItem {
   read: boolean;
 }
 
-const initialNotifications: NotificationItem[] = [
-  {
-    id: 'n1',
-    type: 'election',
-    title: 'باب التصويت مفتوح',
-    message: 'تم فتح باب التصويت للانتخابات النيابية 2024. يمكنك التصويت الآن من خلال صفحة التصويت الإلكتروني.',
-    time: 'منذ 5 دقائق',
-    read: false,
-  },
-  {
-    id: 'n2',
-    type: 'success',
-    title: 'تم التحقق من هويتك',
-    message: 'تم التحقق من بياناتك في سجل الناخبين بنجاح. أنت مؤهل للمشاركة في الانتخابات.',
-    time: 'منذ ساعة',
-    read: false,
-  },
-  {
-    id: 'n3',
-    type: 'info',
-    title: 'تحديث النظام',
-    message: 'تم تحديث نظام التصويت الإلكتروني إلى الإصدار الجديد. يُنصح بمسح ذاكرة التخزين المؤقت لتجربة أفضل.',
-    time: 'منذ 3 ساعات',
-    read: true,
-  },
-  {
-    id: 'n4',
-    type: 'warning',
-    title: 'تذكير: آخر موعد للتصويت',
-    message: 'تذكير: ينتهي التصويت في انتخابات الدائرة المحلية خلال 24 ساعة. لا تفوّت حقك الانتخابي.',
-    time: 'أمس',
-    read: true,
-  },
-  {
-    id: 'n5',
-    type: 'info',
-    title: 'نتائج مؤقتة',
-    message: 'ستُعلن نتائج القائمة العامة فور اكتمال فرز الأصوات وإغلاق صناديق الاقتراع الإلكترونية.',
-    time: 'منذ يومين',
-    read: true,
-  },
-  {
-    id: 'n6',
-    type: 'success',
-    title: 'تم تسجيل صوتك بنجاح',
-    message: 'صوتك مُقيَّد في البلوكشين ولا يمكن تعديله. رقم العملية: 0x8a11...9ae7. شكرًا لمشاركتك.',
-    time: 'منذ 3 أيام',
-    read: true,
-  },
-];
+function buildInitialNotifications(language: string): NotificationItem[] {
+  const ar = language === 'ar';
+  return [
+    {
+      id: 'n1',
+      type: 'election',
+      title: ar ? 'باب التصويت مفتوح' : 'Voting is now open',
+      message: ar
+        ? 'تم فتح باب التصويت للانتخابات النيابية 2024. يمكنك التصويت الآن من خلال صفحة التصويت الإلكتروني.'
+        : 'Voting for the 2024 parliamentary election is now open. You can vote now from the e-voting page.',
+      time: ar ? 'منذ 5 دقائق' : '5 minutes ago',
+      read: false,
+    },
+    {
+      id: 'n2',
+      type: 'success',
+      title: ar ? 'تم التحقق من هويتك' : 'Identity verified',
+      message: ar
+        ? 'تم التحقق من بياناتك في سجل الناخبين بنجاح. أنت مؤهل للمشاركة في الانتخابات.'
+        : 'Your voter registry data has been verified successfully. You are eligible to vote.',
+      time: ar ? 'منذ ساعة' : '1 hour ago',
+      read: false,
+    },
+    {
+      id: 'n3',
+      type: 'info',
+      title: ar ? 'تحديث النظام' : 'System update',
+      message: ar
+        ? 'تم تحديث نظام التصويت الإلكتروني إلى الإصدار الجديد. يُنصح بمسح ذاكرة التخزين المؤقت لتجربة أفضل.'
+        : 'The e-voting system was updated to a new version. Clearing cache is recommended for best experience.',
+      time: ar ? 'منذ 3 ساعات' : '3 hours ago',
+      read: true,
+    },
+    {
+      id: 'n4',
+      type: 'warning',
+      title: ar ? 'تذكير: آخر موعد للتصويت' : 'Reminder: Voting deadline',
+      message: ar
+        ? 'تذكير: ينتهي التصويت في انتخابات الدائرة المحلية خلال 24 ساعة. لا تفوّت حقك الانتخابي.'
+        : 'Reminder: Local district voting closes in 24 hours. Do not miss your right to vote.',
+      time: ar ? 'أمس' : 'Yesterday',
+      read: true,
+    },
+    {
+      id: 'n5',
+      type: 'info',
+      title: ar ? 'نتائج مؤقتة' : 'Interim results',
+      message: ar
+        ? 'ستُعلن نتائج القائمة العامة فور اكتمال فرز الأصوات وإغلاق صناديق الاقتراع الإلكترونية.'
+        : 'General list results will be announced after counting is complete and digital ballot boxes are closed.',
+      time: ar ? 'منذ يومين' : '2 days ago',
+      read: true,
+    },
+    {
+      id: 'n6',
+      type: 'success',
+      title: ar ? 'تم تسجيل صوتك بنجاح' : 'Vote recorded successfully',
+      message: ar
+        ? 'صوتك مُقيَّد في البلوكشين ولا يمكن تعديله. رقم العملية: 0x8a11...9ae7. شكرًا لمشاركتك.'
+        : 'Your vote is recorded on blockchain and cannot be modified. Tx ID: 0x8a11...9ae7. Thank you.',
+      time: ar ? 'منذ 3 أيام' : '3 days ago',
+      read: true,
+    },
+  ];
+}
 
 const iconMap = {
   info: <Info className="w-5 h-5 text-blue-500" />,
@@ -82,7 +97,9 @@ interface NotificationsProps {
 }
 
 export const Notifications = ({ language = 'ar' }: NotificationsProps) => {
-  const [notifications, setNotifications] = useState<NotificationItem[]>(initialNotifications);
+  const isArabic = language === 'ar';
+  const t = (ar: string, en: string) => (isArabic ? ar : en);
+  const [notifications, setNotifications] = useState<NotificationItem[]>(() => buildInitialNotifications(language));
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
 
   const unreadCount = notifications.filter((n) => !n.read).length;
@@ -101,6 +118,16 @@ export const Notifications = ({ language = 'ar' }: NotificationsProps) => {
 
   const displayed = filter === 'unread' ? notifications.filter((n) => !n.read) : notifications;
 
+  React.useEffect(() => {
+    setNotifications((prev) => {
+      const localized = buildInitialNotifications(language);
+      return localized.map((item) => {
+        const existing = prev.find((p) => p.id === item.id);
+        return existing ? { ...item, read: existing.read } : item;
+      });
+    });
+  }, [language]);
+
   return (
     <div className="mx-auto max-w-3xl space-y-4 duration-500 animate-in fade-in slide-in-from-bottom-4 md:space-y-6">
       {/* Header */}
@@ -115,9 +142,11 @@ export const Notifications = ({ language = 'ar' }: NotificationsProps) => {
             )}
           </div>
           <div className="min-w-0 text-right">
-            <h2 className="text-lg font-black text-slate-900 md:text-xl">الإشعارات</h2>
+            <h2 className="text-lg font-black text-slate-900 md:text-xl">{t('الإشعارات', 'Notifications')}</h2>
             <p className="text-xs text-slate-400">
-              {unreadCount > 0 ? `لديك ${unreadCount} إشعارات غير مقروءة` : 'جميع الإشعارات مقروءة'}
+              {unreadCount > 0
+                ? t(`لديك ${unreadCount} إشعارات غير مقروءة`, `You have ${unreadCount} unread notifications`)
+                : t('جميع الإشعارات مقروءة', 'All notifications are read')}
             </p>
           </div>
         </div>
@@ -130,7 +159,7 @@ export const Notifications = ({ language = 'ar' }: NotificationsProps) => {
               className="touch-manipulation flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-2.5 text-xs font-bold text-indigo-600 transition-all hover:bg-indigo-100 active:opacity-90 sm:w-auto sm:py-2"
             >
               <CheckCheck className="h-4 w-4 shrink-0" />
-              تحديد الكل كمقروء
+              {t('تحديد الكل كمقروء', 'Mark all as read')}
             </button>
           )}
         </div>
@@ -146,7 +175,7 @@ export const Notifications = ({ language = 'ar' }: NotificationsProps) => {
             filter === 'all' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700',
           )}
         >
-          الكل ({notifications.length})
+          {t('الكل', 'All')} ({notifications.length})
         </button>
         <button
           type="button"
@@ -156,7 +185,7 @@ export const Notifications = ({ language = 'ar' }: NotificationsProps) => {
             filter === 'unread' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700',
           )}
         >
-          غير مقروء ({unreadCount})
+          {t('غير مقروء', 'Unread')} ({unreadCount})
         </button>
       </div>
 
@@ -166,8 +195,10 @@ export const Notifications = ({ language = 'ar' }: NotificationsProps) => {
           <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-3xl bg-slate-50 md:mb-6 md:h-20 md:w-20">
             <BellOff className="h-9 w-9 text-slate-300 md:h-10 md:w-10" />
           </div>
-          <h3 className="text-base font-bold text-slate-500 md:text-lg">لا توجد إشعارات</h3>
-          <p className="mt-2 max-w-xs text-sm leading-relaxed text-slate-400">ستظهر هنا إشعارات الانتخابات والنظام</p>
+          <h3 className="text-base font-bold text-slate-500 md:text-lg">{t('لا توجد إشعارات', 'No notifications')}</h3>
+          <p className="mt-2 max-w-xs text-sm leading-relaxed text-slate-400">
+            {t('ستظهر هنا إشعارات الانتخابات والنظام', 'Election and system notifications will appear here')}
+          </p>
         </div>
       ) : (
         <div className="space-y-2.5 md:space-y-3">
@@ -211,7 +242,7 @@ export const Notifications = ({ language = 'ar' }: NotificationsProps) => {
                     deleteNotification(notif.id);
                   }}
                   className="touch-manipulation absolute end-2 top-2 flex min-h-11 min-w-11 items-center justify-center rounded-xl text-slate-400 opacity-100 transition-all hover:bg-rose-50 hover:text-rose-500 active:bg-rose-100 md:end-3 md:top-3 md:opacity-0 md:group-hover:opacity-100"
-                  aria-label="حذف الإشعار"
+                  aria-label={t('حذف الإشعار', 'Delete notification')}
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
@@ -224,7 +255,10 @@ export const Notifications = ({ language = 'ar' }: NotificationsProps) => {
       {/* Footer info */}
       <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4 text-right md:p-5">
         <p className="text-xs leading-relaxed text-slate-400">
-          يتم تحديث الإشعارات تلقائياً عند وجود أي تغيير في حالة الانتخابات أو عمليات التصويت. تبقى الإشعارات لمدة 30 يوماً.
+          {t(
+            'يتم تحديث الإشعارات تلقائياً عند وجود أي تغيير في حالة الانتخابات أو عمليات التصويت. تبقى الإشعارات لمدة 30 يوماً.',
+            'Notifications update automatically when election status or voting activity changes. Notifications are kept for 30 days.',
+          )}
         </p>
       </div>
     </div>

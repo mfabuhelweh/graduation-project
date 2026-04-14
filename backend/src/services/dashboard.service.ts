@@ -1,4 +1,5 @@
 import { env } from '../config/env.js';
+import { LOCAL_SYSTEM_ELECTION_TITLE, isVisibleSystemElectionTitle } from '../constants/systemElections.js';
 import { memoryStore } from '../data/memoryStore.js';
 import { query, usePostgres } from '../db/pool.js';
 
@@ -9,11 +10,12 @@ function percent(part: number, total: number) {
 export async function getDashboardSummary() {
   if (env.enableMemoryStore) {
     const elections = Array.from(memoryStore.elections.values());
+    const visibleElections = elections.filter((election: any) => isVisibleSystemElectionTitle(election.title));
     const voters = Array.from(memoryStore.voters.values());
     const votes = Array.from(memoryStore.votes.values());
     const activeElection =
-      elections.find((election: any) => ['Active', 'Voting Open', 'active'].includes(String(election.status))) ||
-      elections[0] ||
+      visibleElections.find((election: any) => ['Active', 'Voting Open', 'active'].includes(String(election.status))) ||
+      visibleElections[0] ||
       null;
     const electionVotes = activeElection ? votes.filter((vote: any) => vote.electionId === activeElection.id) : votes;
 
@@ -63,6 +65,7 @@ export async function getDashboardSummary() {
             (SELECT COUNT(*) FROM voters v WHERE v.election_id = e.id) AS voters_count,
             (SELECT COUNT(*) FROM districts d WHERE d.election_id = e.id) AS districts_count
      FROM elections e
+     WHERE e.title = $1
      ORDER BY
        CASE e.status
          WHEN 'active' THEN 1
@@ -76,6 +79,7 @@ export async function getDashboardSummary() {
        (SELECT COUNT(*) FROM voters v WHERE v.election_id = e.id) DESC,
        e.created_at DESC
      LIMIT 1`,
+    [LOCAL_SYSTEM_ELECTION_TITLE],
   );
 
   const activeElection = activeElectionResult.rows[0] || null;

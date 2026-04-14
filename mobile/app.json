@@ -1,11 +1,18 @@
 {
   "expo": {
-    "name": "VoteSecure Voter",
+    "name": "VoteSecure",
     "slug": "vote-secure-voter",
     "version": "1.0.0",
     "scheme": "votesecure-voter",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
+    "newArchEnabled": false,
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0f766e"
+    },
     "assetBundlePatterns": [
       "**/*"
     ],
@@ -17,13 +24,23 @@
       "typedRoutes": true
     },
     "android": {
-      "package": "com.graduationproject.votesecurevoter"
+      "package": "com.graduationproject.votesecurevoter",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0f766e"
+      },
+      "permissions": [],
+      "allowBackup": false
     },
     "ios": {
-      "bundleIdentifier": "com.graduationproject.votesecurevoter"
+      "bundleIdentifier": "com.graduationproject.votesecurevoter",
+      "buildNumber": "1",
+      "supportsTablet": false
     },
     "web": {
-      "bundler": "metro"
+      "bundler": "metro",
+      "favicon": "./assets/favicon.png"
     }
   }
 }

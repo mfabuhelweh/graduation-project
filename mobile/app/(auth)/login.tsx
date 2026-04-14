@@ -1,7 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
-import { KeyboardAvoidingView, Platform, StyleSheet, View } from "react-native";
+import {
+  KeyboardAvoidingView,
+  Platform,
+  StyleSheet,
+  View,
+  TouchableOpacity
+} from "react-native";
 import { router } from "expo-router";
-import { Button, Card, Checkbox, Text, TextInput } from "react-native-paper";
+import { Text, TextInput } from "react-native-paper";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { ErrorMessage } from "@/components/ErrorMessage";
 import { ScreenContainer } from "@/components/ScreenContainer";
 import { colors } from "@/constants/colors";
@@ -39,10 +46,10 @@ export default function LoginScreen() {
     }
   }, [isAuthenticated]);
 
-  const stageTitle = useMemo(() => {
+  const stageLabel = useMemo(() => {
     if (stage === 0) return "الدخول عبر سند";
-    if (stage === 1) return "إدخال رمز التحقق";
-    return "الموافقة وإكمال الدخول";
+    if (stage === 1) return "رمز التحقق";
+    return "الموافقة وإتمام الدخول";
   }, [stage]);
 
   const clearFeedback = () => {
@@ -55,11 +62,9 @@ export default function LoginScreen() {
       setError("يرجى إدخال رقم وطني صحيح مكوّن من 10 أرقام.");
       return;
     }
-
     try {
       clearFeedback();
       const response = await startSanadLogin(nationalId);
-
       setChallengeId(response.challengeId);
       setCitizenName(response.citizenName);
       setMaskedPhoneNumber(response.maskedPhoneNumber);
@@ -78,12 +83,10 @@ export default function LoginScreen() {
       setError("ابدأ تسجيل الدخول عبر سند أولًا.");
       return;
     }
-
     if (!otpPattern.test(otp.trim())) {
       setError("يرجى إدخال رمز تحقق مكوّن من 6 أرقام.");
       return;
     }
-
     try {
       clearFeedback();
       const response = await verifySanadOtp(challengeId, otp);
@@ -103,12 +106,10 @@ export default function LoginScreen() {
       setError("جلسة سند غير مكتملة.");
       return;
     }
-
     if (!consentAccepted) {
       setError("يجب الموافقة على مشاركة بيانات الهوية لإكمال الدخول.");
       return;
     }
-
     try {
       clearFeedback();
       const session = await completeSanadLogin(challengeId);
@@ -119,155 +120,233 @@ export default function LoginScreen() {
     }
   };
 
+  // مؤشرات المراحل
+  const stages = ["الهوية", "التحقق", "الموافقة"];
+
   return (
     <ScreenContainer scroll={false}>
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={styles.wrapper}
       >
-        <View style={styles.hero}>
-          <Text variant="headlineMedium" style={styles.title}>
-            تطبيق الناخبين
-          </Text>
-          <Text variant="bodyLarge" style={styles.subtitle}>
-            نفس تجربة الويب للناخبين: تسجيل الدخول عبر سند ثم إكمال الدخول الآمن.
-          </Text>
+        {/* الشعار والعنوان */}
+        <View style={styles.heroBlock}>
+          <View style={styles.logoCircle}>
+            <MaterialCommunityIcons name="vote" size={36} color="#fff" />
+          </View>
+          <Text style={styles.appName}>نظام الانتخابات</Text>
+          <Text style={styles.appSub}>الهيئة المستقلة للانتخاب</Text>
         </View>
 
-        <Card style={styles.card}>
-          <Card.Content style={styles.content}>
-            <Text variant="titleLarge" style={styles.formTitle}>
-              {stageTitle}
-            </Text>
+        {/* مؤشرات المراحل */}
+        <View style={styles.stepsRow}>
+          {stages.map((stepLabel, idx) => (
+            <View key={idx} style={styles.stepItem}>
+              <View
+                style={[
+                  styles.stepDot,
+                  idx === stage && styles.stepDotActive,
+                  idx < stage && styles.stepDotDone
+                ]}
+              >
+                {idx < stage ? (
+                  <MaterialCommunityIcons name="check" size={12} color="#fff" />
+                ) : (
+                  <Text style={styles.stepNum}>{idx + 1}</Text>
+                )}
+              </View>
+              <Text
+                style={[
+                  styles.stepLabel,
+                  idx === stage && styles.stepLabelActive
+                ]}
+              >
+                {stepLabel}
+              </Text>
+            </View>
+          ))}
+        </View>
 
-            {error ? <ErrorMessage message={error} /> : null}
-            {!error && message ? (
-              <Card style={styles.messageCard}>
-                <Card.Content>
-                  <Text style={styles.messageText}>{message}</Text>
-                </Card.Content>
-              </Card>
-            ) : null}
+        {/* البطاقة الرئيسية */}
+        <View style={styles.card}>
+          {/* عنوان المرحلة */}
+          <View style={styles.cardHeader}>
+            <Text style={styles.cardTitle}>{stageLabel}</Text>
+          </View>
 
-            {stage === 0 ? (
-              <>
-                <TextInput
-                  mode="outlined"
-                  label="الرقم الوطني"
-                  keyboardType="number-pad"
-                  maxLength={10}
-                  value={nationalId}
-                  onChangeText={(value) => {
-                    setNationalId(value.replace(/\D/g, ""));
-                    clearFeedback();
-                  }}
-                  textAlign="center"
-                  style={styles.input}
-                />
+          {error ? <ErrorMessage message={error} /> : null}
 
-                <Button
-                  mode="contained"
-                  loading={isSigningIn}
-                  disabled={isSigningIn}
-                  onPress={handleStartSanad}
-                  style={styles.button}
-                >
-                  الدخول الموحد عبر سند
-                </Button>
-              </>
-            ) : null}
+          {!error && message ? (
+            <View style={styles.successBanner}>
+              <MaterialCommunityIcons
+                name="check-circle"
+                size={18}
+                color={colors.success}
+              />
+              <Text style={styles.successText}>{message}</Text>
+            </View>
+          ) : null}
 
-            {stage === 1 ? (
-              <>
-                <Card style={styles.infoCard}>
-                  <Card.Content style={styles.infoContent}>
-                    <Text style={styles.infoTitle}>{citizenName}</Text>
-                    <Text style={styles.infoText}>
-                      الهاتف المرتبط: {maskedPhoneNumber}
-                    </Text>
-                    <Text style={styles.infoText}>
-                      مرجع الطلب: {requestReference}
-                    </Text>
-                    <Text style={styles.infoText}>
-                      انتهاء الرمز: {formatDate(expiresAt)}
-                    </Text>
-                    {sandboxOtp ? (
-                      <Text style={styles.sandboxOtp}>
-                        رمز الاختبار: {sandboxOtp}
-                      </Text>
-                    ) : null}
-                  </Card.Content>
-                </Card>
-
-                <TextInput
-                  mode="outlined"
-                  label="رمز التحقق"
-                  keyboardType="number-pad"
-                  maxLength={6}
-                  value={otp}
-                  onChangeText={(value) => {
-                    setOtp(value.replace(/\D/g, ""));
-                    clearFeedback();
-                  }}
-                  textAlign="center"
-                  style={styles.input}
-                />
-
-                <Button
-                  mode="contained"
-                  loading={isSigningIn}
-                  disabled={isSigningIn}
-                  onPress={handleVerifyOtp}
-                  style={styles.button}
-                >
-                  متابعة التحقق
-                </Button>
-              </>
-            ) : null}
-
-            {stage === 2 ? (
-              <>
-                <Card style={styles.infoCard}>
-                  <Card.Content style={styles.infoContent}>
-                    <Text style={styles.infoTitle}>الموافقة على مشاركة بيانات الهوية</Text>
-                    <Text style={styles.infoText}>
-                      سيتم استخدام بيانات الهوية الأساسية الواردة من سند لإكمال تسجيل الدخول فقط.
-                    </Text>
-                    <Text style={styles.infoText}>
-                      المستخدم: {citizenName}
-                    </Text>
-                    <Text style={styles.infoText}>
-                      مرجع الجلسة: {requestReference}
-                    </Text>
-                  </Card.Content>
-                </Card>
-
-                <View style={styles.checkboxRow}>
-                  <Checkbox
-                    status={consentAccepted ? "checked" : "unchecked"}
-                    onPress={() => {
-                      setConsentAccepted((current) => !current);
-                      clearFeedback();
-                    }}
+          {/* المرحلة 0: الرقم الوطني */}
+          {stage === 0 ? (
+            <View style={styles.fieldGroup}>
+              <TextInput
+                mode="outlined"
+                label="الرقم الوطني"
+                keyboardType="number-pad"
+                maxLength={10}
+                value={nationalId}
+                onChangeText={(value) => {
+                  setNationalId(value.replace(/\D/g, ""));
+                  clearFeedback();
+                }}
+                textAlign="center"
+                style={styles.input}
+                outlineStyle={styles.inputOutline}
+                textColor={colors.text}
+              />
+              <TouchableOpacity
+                style={[
+                  styles.primaryButton,
+                  isSigningIn && styles.buttonDisabled
+                ]}
+                onPress={handleStartSanad}
+                disabled={isSigningIn}
+                activeOpacity={0.85}
+              >
+                {isSigningIn ? (
+                  <MaterialCommunityIcons
+                    name="loading"
+                    size={18}
+                    color="#fff"
                   />
-                  <Text style={styles.checkboxText}>
-                    أوافق على مشاركة بيانات الهوية الرقمية اللازمة مع النظام لإتمام تسجيل الدخول.
-                  </Text>
-                </View>
+                ) : (
+                  <MaterialCommunityIcons
+                    name="shield-check"
+                    size={18}
+                    color="#fff"
+                  />
+                )}
+                <Text style={styles.primaryButtonText}>
+                  {isSigningIn ? "جاري الاتصال..." : "الدخول الموحد عبر سند"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
 
-                <Button
-                  mode="contained"
-                  loading={isSigningIn}
-                  disabled={isSigningIn}
-                  onPress={handleComplete}
-                  style={styles.button}
+          {/* المرحلة 1: OTP */}
+          {stage === 1 ? (
+            <View style={styles.fieldGroup}>
+              <View style={styles.infoBox}>
+                <Text style={styles.infoName}>{citizenName}</Text>
+                <Text style={styles.infoRow}>
+                  <Text style={styles.infoKey}>الهاتف: </Text>
+                  {maskedPhoneNumber}
+                </Text>
+                {sandboxOtp ? (
+                  <View style={styles.otpHintBox}>
+                    <Text style={styles.otpHintLabel}>رمز الاختبار</Text>
+                    <Text style={styles.otpHintValue}>{sandboxOtp}</Text>
+                  </View>
+                ) : null}
+              </View>
+
+              <TextInput
+                mode="outlined"
+                label="رمز التحقق المكون من 6 أرقام"
+                keyboardType="number-pad"
+                maxLength={6}
+                value={otp}
+                onChangeText={(value) => {
+                  setOtp(value.replace(/\D/g, ""));
+                  clearFeedback();
+                }}
+                textAlign="center"
+                style={styles.input}
+                outlineStyle={styles.inputOutline}
+                textColor={colors.text}
+              />
+
+              <TouchableOpacity
+                style={[
+                  styles.primaryButton,
+                  isSigningIn && styles.buttonDisabled
+                ]}
+                onPress={handleVerifyOtp}
+                disabled={isSigningIn}
+                activeOpacity={0.85}
+              >
+                <MaterialCommunityIcons name="lock-check" size={18} color="#fff" />
+                <Text style={styles.primaryButtonText}>
+                  {isSigningIn ? "جاري التحقق..." : "تحقق من الرمز"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
+
+          {/* المرحلة 2: الموافقة */}
+          {stage === 2 ? (
+            <View style={styles.fieldGroup}>
+              <View style={styles.infoBox}>
+                <Text style={styles.infoName}>{citizenName}</Text>
+                <Text style={styles.infoRow}>
+                  مرجع الجلسة: {requestReference}
+                </Text>
+              </View>
+
+              <View style={styles.consentBox}>
+                <Text style={styles.consentTitle}>
+                  الموافقة على مشاركة البيانات
+                </Text>
+                <Text style={styles.consentText}>
+                  سيتم استخدام بيانات الهوية الواردة من سند لإكمال تسجيل
+                  الدخول فقط، ولن تُشارك مع أي طرف آخر.
+                </Text>
+                <TouchableOpacity
+                  style={styles.checkRow}
+                  onPress={() => {
+                    setConsentAccepted((v) => !v);
+                    clearFeedback();
+                  }}
+                  activeOpacity={0.8}
                 >
-                  إكمال الدخول عبر سند
-                </Button>
-              </>
-            ) : null}
-          </Card.Content>
-        </Card>
+                  <View
+                    style={[
+                      styles.checkbox,
+                      consentAccepted && styles.checkboxChecked
+                    ]}
+                  >
+                    {consentAccepted ? (
+                      <MaterialCommunityIcons
+                        name="check"
+                        size={14}
+                        color="#fff"
+                      />
+                    ) : null}
+                  </View>
+                  <Text style={styles.checkLabel}>
+                    أوافق على مشاركة بيانات الهوية الرقمية لإتمام الدخول
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              <TouchableOpacity
+                style={[
+                  styles.primaryButton,
+                  (!consentAccepted || isSigningIn) && styles.buttonDisabled
+                ]}
+                onPress={handleComplete}
+                disabled={!consentAccepted || isSigningIn}
+                activeOpacity={0.85}
+              >
+                <MaterialCommunityIcons name="login" size={18} color="#fff" />
+                <Text style={styles.primaryButtonText}>
+                  {isSigningIn ? "جاري إتمام الدخول..." : "إكمال الدخول عبر سند"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
+        </View>
       </KeyboardAvoidingView>
     </ScreenContainer>
   );
@@ -277,78 +356,248 @@ const styles = StyleSheet.create({
   wrapper: {
     flex: 1,
     justifyContent: "center",
-    gap: 18
+    gap: 22
   },
-  hero: {
-    alignItems: "flex-end",
+
+  // ─── Hero ─────────────────────────────────────────────────────────────
+  heroBlock: {
+    alignItems: "center",
+    gap: 8
+  },
+  logoCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: colors.primary,
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.45,
+    shadowRadius: 12,
+    elevation: 10
+  },
+  appName: {
+    color: colors.text,
+    fontSize: 22,
+    fontWeight: "800"
+  },
+  appSub: {
+    color: colors.textMuted,
+    fontSize: 13
+  },
+
+  // ─── Steps ────────────────────────────────────────────────────────────
+  stepsRow: {
+    flexDirection: "row-reverse",
+    justifyContent: "center",
+    gap: 24
+  },
+  stepItem: {
+    alignItems: "center",
     gap: 6
   },
-  title: {
+  stepDot: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: colors.border,
+    justifyContent: "center",
+    alignItems: "center"
+  },
+  stepDotActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 6,
+    elevation: 4
+  },
+  stepDotDone: {
+    backgroundColor: colors.success,
+    borderColor: colors.success
+  },
+  stepNum: {
+    color: colors.textSoft,
+    fontSize: 12,
+    fontWeight: "700"
+  },
+  stepLabel: {
+    color: colors.textMuted,
+    fontSize: 11,
+    fontWeight: "500"
+  },
+  stepLabelActive: {
+    color: colors.primaryLight,
+    fontWeight: "700"
+  },
+
+  // ─── Card ─────────────────────────────────────────────────────────────
+  card: {
+    backgroundColor: colors.surface,
+    borderRadius: 22,
+    padding: 22,
+    gap: 16,
+    borderWidth: 1,
+    borderColor: colors.border
+  },
+  cardHeader: {
+    alignItems: "flex-end"
+  },
+  cardTitle: {
     color: colors.text,
+    fontSize: 18,
     fontWeight: "800",
     textAlign: "right"
   },
-  subtitle: {
-    color: colors.textMuted,
-    textAlign: "right",
-    lineHeight: 24
+
+  // ─── Success banner ───────────────────────────────────────────────────
+  successBanner: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: colors.successBg,
+    borderRadius: 12,
+    padding: 12
   },
-  card: {
-    backgroundColor: colors.surface
+  successText: {
+    color: colors.success,
+    fontSize: 13,
+    flex: 1,
+    textAlign: "right"
   },
-  content: {
+
+  // ─── Fields ───────────────────────────────────────────────────────────
+  fieldGroup: {
     gap: 14
   },
-  formTitle: {
-    textAlign: "right",
-    color: colors.text,
-    fontWeight: "700"
-  },
-  messageCard: {
-    backgroundColor: "#ecfdf5"
-  },
-  messageText: {
-    color: colors.success,
-    textAlign: "right"
-  },
-  infoCard: {
-    backgroundColor: "#f8fafc"
-  },
-  infoContent: {
-    gap: 6,
-    alignItems: "flex-end"
-  },
-  infoTitle: {
-    color: colors.text,
-    fontWeight: "700",
-    textAlign: "right"
-  },
-  infoText: {
-    color: colors.textMuted,
-    textAlign: "right"
-  },
-  sandboxOtp: {
-    color: colors.primary,
-    fontWeight: "700",
-    textAlign: "right"
-  },
   input: {
-    backgroundColor: colors.surface
+    backgroundColor: colors.backgroundCard,
+    textAlign: "center"
   },
-  checkboxRow: {
+  inputOutline: {
+    borderColor: colors.border,
+    borderRadius: 12
+  },
+
+  // ─── Info box ─────────────────────────────────────────────────────────
+  infoBox: {
+    backgroundColor: colors.backgroundCard,
+    borderRadius: 14,
+    padding: 16,
+    gap: 6,
+    alignItems: "flex-end",
+    borderWidth: 1,
+    borderColor: colors.border
+  },
+  infoName: {
+    color: colors.text,
+    fontWeight: "700",
+    fontSize: 15,
+    textAlign: "right"
+  },
+  infoRow: {
+    color: colors.textSoft,
+    fontSize: 13,
+    textAlign: "right"
+  },
+  infoKey: {
+    color: colors.textMuted,
+    fontWeight: "600"
+  },
+  otpHintBox: {
+    backgroundColor: colors.primaryGlow,
+    borderRadius: 10,
+    padding: 10,
+    alignItems: "center",
+    width: "100%",
+    marginTop: 4
+  },
+  otpHintLabel: {
+    color: colors.textMuted,
+    fontSize: 11,
+    marginBottom: 2
+  },
+  otpHintValue: {
+    color: colors.primaryLight,
+    fontWeight: "800",
+    fontSize: 22,
+    letterSpacing: 4
+  },
+
+  // ─── Consent ──────────────────────────────────────────────────────────
+  consentBox: {
+    backgroundColor: colors.backgroundCard,
+    borderRadius: 14,
+    padding: 16,
+    gap: 12,
+    borderWidth: 1,
+    borderColor: colors.border
+  },
+  consentTitle: {
+    color: colors.text,
+    fontWeight: "700",
+    fontSize: 14,
+    textAlign: "right"
+  },
+  consentText: {
+    color: colors.textSoft,
+    fontSize: 13,
+    textAlign: "right",
+    lineHeight: 20
+  },
+  checkRow: {
     flexDirection: "row-reverse",
     alignItems: "flex-start",
-    gap: 8
+    gap: 10
   },
-  checkboxText: {
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: colors.border,
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 1
+  },
+  checkboxChecked: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary
+  },
+  checkLabel: {
     flex: 1,
     color: colors.text,
+    fontSize: 13,
     textAlign: "right",
-    lineHeight: 22,
-    marginTop: 8
+    lineHeight: 20
   },
-  button: {
-    marginTop: 4,
-    backgroundColor: colors.primary
+
+  // ─── Buttons ──────────────────────────────────────────────────────────
+  primaryButton: {
+    flexDirection: "row-reverse",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: colors.primary,
+    borderRadius: 14,
+    paddingVertical: 14,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 6
+  },
+  buttonDisabled: {
+    backgroundColor: colors.surfaceAlt,
+    shadowOpacity: 0
+  },
+  primaryButtonText: {
+    color: "#fff",
+    fontWeight: "800",
+    fontSize: 15
   }
 });

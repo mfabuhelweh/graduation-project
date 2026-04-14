@@ -1,6 +1,5 @@
 import * as React from 'react';
 import type { LucideIcon } from 'lucide-react';
-import { Menu } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 export interface MobileNavItem {
@@ -11,23 +10,15 @@ export interface MobileNavItem {
 
 interface MobileBottomNavProps {
   items: MobileNavItem[];
-  /** Which primary tab is active (matches `items[].key`). */
   activeItemKey: string | null;
-  /** Highlight the "More" button (e.g. Settings open). */
-  moreActive: boolean;
   onSelect: (key: string) => void;
-  onOpenMore: () => void;
-  moreLabel: string;
   dir: 'rtl' | 'ltr';
 }
 
 export function MobileBottomNav({
   items,
   activeItemKey,
-  moreActive,
   onSelect,
-  onOpenMore,
-  moreLabel,
   dir,
 }: MobileBottomNavProps) {
   return (
@@ -56,17 +47,6 @@ export function MobileBottomNav({
           </button>
         );
       })}
-      <button
-        type="button"
-        onClick={onOpenMore}
-        className={cn(
-          'flex min-h-[52px] min-w-[56px] flex-col items-center justify-center gap-0.5 px-1 py-1 transition-colors active:bg-slate-50',
-          moreActive ? 'text-blue-600' : 'text-slate-500',
-        )}
-      >
-        <Menu className="h-6 w-6 shrink-0" strokeWidth={moreActive ? 2.5 : 2} aria-hidden />
-        <span className="max-w-full truncate text-[10px] font-bold leading-tight">{moreLabel}</span>
-      </button>
     </nav>
   );
 }

@@ -1,70 +1,66 @@
+import { useMemo } from "react";
 import { StyleSheet, View } from "react-native";
-import { Button, Card, Text } from "react-native-paper";
+import { Text } from "react-native-paper";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { colors } from "@/constants/colors";
+import { useAppPreferences } from "@/hooks/useAppPreferences";
 
 interface EmptyStateProps {
   title: string;
-  description: string;
+  description?: string;
   icon?: keyof typeof MaterialCommunityIcons.glyphMap;
-  actionLabel?: string;
-  onAction?: () => void;
 }
 
 export function EmptyState({
   title,
   description,
-  icon = "inbox-outline",
-  actionLabel,
-  onAction
+  icon = "inbox-outline"
 }: EmptyStateProps) {
+  const { colors } = useAppPreferences();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   return (
-    <Card style={styles.card}>
-      <Card.Content style={styles.content}>
-        <View style={styles.iconWrapper}>
-          <MaterialCommunityIcons color={colors.primary} name={icon} size={28} />
-        </View>
-        <Text variant="titleMedium" style={styles.title}>
-          {title}
-        </Text>
-        <Text variant="bodyMedium" style={styles.description}>
-          {description}
-        </Text>
-        {actionLabel && onAction ? (
-          <Button mode="contained-tonal" onPress={onAction}>
-            {actionLabel}
-          </Button>
-        ) : null}
-      </Card.Content>
-    </Card>
+    <View style={styles.container}>
+      <View style={styles.iconCircle}>
+        <MaterialCommunityIcons name={icon} size={40} color={colors.primary} />
+      </View>
+      <Text style={styles.title}>{title}</Text>
+      {description ? <Text style={styles.description}>{description}</Text> : null}
+    </View>
   );
 }
 
-const styles = StyleSheet.create({
-  card: {
-    backgroundColor: colors.surface
-  },
-  content: {
-    alignItems: "center",
-    gap: 10,
-    paddingVertical: 28
-  },
-  iconWrapper: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#dff4f1"
-  },
-  title: {
-    fontWeight: "700",
-    color: colors.text,
-    textAlign: "center"
-  },
-  description: {
-    color: colors.textMuted,
-    textAlign: "center",
-    lineHeight: 22
-  }
-});
+function createStyles(colors: ReturnType<typeof useAppPreferences>["colors"]) {
+  return StyleSheet.create({
+    container: {
+      backgroundColor: colors.surface,
+      borderRadius: 20,
+      padding: 32,
+      alignItems: "center",
+      gap: 12,
+      borderWidth: 1,
+      borderColor: colors.border
+    },
+    iconCircle: {
+      width: 72,
+      height: 72,
+      borderRadius: 36,
+      backgroundColor: colors.primaryGlow,
+      justifyContent: "center",
+      alignItems: "center",
+      marginBottom: 4
+    },
+    title: {
+      color: colors.text,
+      fontWeight: "700",
+      fontSize: 16,
+      textAlign: "center"
+    },
+    description: {
+      color: colors.textSoft,
+      textAlign: "center",
+      lineHeight: 22,
+      fontSize: 13,
+      maxWidth: 240
+    }
+  });
+}

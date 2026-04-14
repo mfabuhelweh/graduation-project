@@ -1,13 +1,14 @@
-import type { PropsWithChildren, ReactNode } from "react";
 import { RefreshControl, ScrollView, StyleSheet, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { colors } from "@/constants/colors";
+import { useMemo } from "react";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useAppPreferences } from "@/hooks/useAppPreferences";
 
-interface ScreenContainerProps extends PropsWithChildren {
+interface ScreenContainerProps {
+  children: React.ReactNode;
   scroll?: boolean;
   refreshing?: boolean;
   onRefresh?: () => void;
-  footer?: ReactNode;
+  center?: boolean;
 }
 
 export function ScreenContainer({
@@ -15,49 +16,65 @@ export function ScreenContainer({
   scroll = true,
   refreshing = false,
   onRefresh,
-  footer
+  center = false
 }: ScreenContainerProps) {
-  const content = (
-    <View style={styles.content}>
-      {children}
-      {footer}
-    </View>
-  );
+  const insets = useSafeAreaInsets();
+  const { colors } = useAppPreferences();
+  const styles = useMemo(() => createStyles(colors.background), [colors.background]);
+
+  const containerStyle = {
+    paddingTop: insets.top + 8,
+    paddingBottom: insets.bottom + 16,
+    paddingHorizontal: 16
+  };
+
+  if (!scroll) {
+    return (
+      <View style={[styles.base, containerStyle, center && styles.centered]}>
+        {children}
+      </View>
+    );
+  }
 
   return (
-    <SafeAreaView edges={["top"]} style={styles.safeArea}>
-      {scroll ? (
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            onRefresh ? (
-              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-            ) : undefined
-          }
-        >
-          {content}
-        </ScrollView>
-      ) : (
-        content
-      )}
-    </SafeAreaView>
+    <ScrollView
+      style={styles.scroll}
+      contentContainerStyle={[styles.content, containerStyle]}
+      keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={false}
+      refreshControl={
+        onRefresh ? (
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
+          />
+        ) : undefined
+      }
+    >
+      {children}
+    </ScrollView>
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: colors.background
-  },
-  scrollContent: {
-    flexGrow: 1
-  },
-  content: {
-    flex: 1,
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 24,
-    gap: 16
-  }
-});
+function createStyles(backgroundColor: string) {
+  return StyleSheet.create({
+    base: {
+      flex: 1,
+      backgroundColor
+    },
+    scroll: {
+      flex: 1,
+      backgroundColor
+    },
+    content: {
+      gap: 14,
+      flexGrow: 1
+    },
+    centered: {
+      justifyContent: "center",
+      alignItems: "center"
+    }
+  });
+}

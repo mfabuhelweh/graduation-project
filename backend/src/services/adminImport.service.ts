@@ -3,7 +3,6 @@ import { query, withTransaction } from '../db/pool.js';
 import { resolveAdminId } from './election.service.js';
 
 export const IMPORT_FILE_ORDER = [
-  'elections',
   'districts',
   'quotas',
   'parties',
@@ -14,12 +13,10 @@ export const IMPORT_FILE_ORDER = [
 ] as const;
 
 export const IMPORT_TEMPLATES: Record<string, string[]> = {
-  elections: ['title', 'description', 'start_at', 'end_at', 'status'],
-  districts: ['election_title', 'district_name', 'district_code', 'seats_count'],
-  quotas: ['election_title', 'district_code', 'quota_name', 'description'],
-  parties: ['election_title', 'party_name', 'party_code', 'logo_url', 'description'],
+  districts: ['district_name', 'district_code', 'seats_count'],
+  quotas: ['district_code', 'quota_name', 'description'],
+  parties: ['party_name', 'party_code', 'logo_url', 'description'],
   party_candidates: [
-    'election_title',
     'party_code',
     'full_name',
     'national_id',
@@ -28,9 +25,8 @@ export const IMPORT_TEMPLATES: Record<string, string[]> = {
     'quota_name',
     'photo_url',
   ],
-  district_lists: ['election_title', 'district_code', 'list_name', 'list_code', 'description'],
+  district_lists: ['district_code', 'list_name', 'list_code', 'description'],
   district_list_candidates: [
-    'election_title',
     'district_code',
     'list_code',
     'full_name',
@@ -41,7 +37,7 @@ export const IMPORT_TEMPLATES: Record<string, string[]> = {
     'quota_name',
     'photo_url',
   ],
-  voters: ['election_title', 'district_code', 'full_name', 'national_id', 'gender', 'birth_date', 'phone_number', 'email', 'status'],
+  voters: ['district_code', 'full_name', 'national_id', 'gender', 'birth_date', 'phone_number', 'email', 'status'],
 };
 
 const DELETION_ORDER = [
@@ -125,14 +121,6 @@ function normalizeInteger(value: unknown) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function normalizeElectionStatus(value: unknown) {
-  const normalized = normalizeValue(value).toLowerCase();
-  if (['draft', 'scheduled', 'active', 'closed', 'archived'].includes(normalized)) return normalized;
-  if (normalized === 'voting open') return 'active';
-  if (normalized === 'results published') return 'archived';
-  return 'draft';
-}
-
 function normalizeVoterStatus(value: unknown) {
   const normalized = normalizeValue(value).toLowerCase();
   if (['eligible', 'pending_verification', 'verified', 'voted', 'blocked'].includes(normalized)) {
@@ -174,6 +162,35 @@ async function lookupElectionIdByTitle(client: any, title: string) {
     [title],
   );
   return (result.rows[0] as { id: string } | undefined)?.id || null;
+}
+
+async function assertElectionExists(client: any, electionId: string) {
+  const result = await client.query(
+    `SELECT id
+     FROM elections
+     WHERE id = $1
+     LIMIT 1`,
+    [electionId],
+  );
+
+  if (!result.rows[0]) {
+    throw new Error('Selected election was not found');
+  }
+
+  return electionId;
+}
+
+async function resolveImportElectionId(client: any, row: RowRecord, selectedElectionId?: string | null) {
+  if (selectedElectionId) return selectedElectionId;
+
+  const electionTitle = normalizeValue(row.election_title);
+  if (!electionTitle) {
+    throw new Error('election_title is required when no election is selected for the import');
+  }
+
+  const electionId = await lookupElectionIdByTitle(client, electionTitle);
+  if (!electionId) throw new Error(`Election "${electionTitle}" was not found`);
+  return electionId;
 }
 
 async function lookupDistrict(client: any, electionId: string, districtCode: string) {
@@ -234,7 +251,14 @@ async function processRows(
   kind: ImportKind,
   file: UploadedImportFile,
   actorEmail: string | undefined,
-  rowHandler: (client: any, row: RowRecord, rowNumber: number, adminId: string) => Promise<RowImportResult>,
+  selectedElectionId: string | null | undefined,
+  rowHandler: (
+    client: any,
+    row: RowRecord,
+    rowNumber: number,
+    adminId: string,
+    resolvedElectionId?: string | null,
+  ) => Promise<RowImportResult>,
 ) {
   const rows = parseSpreadsheet(file);
   const adminId = await resolveAdminId(actorEmail);
@@ -252,6 +276,9 @@ async function processRows(
   };
 
   await withTransaction(async (client) => {
+    const resolvedElectionId = selectedElectionId
+      ? await assertElectionExists(client, selectedElectionId)
+      : null;
     const batchInsert = await client.query(
       `INSERT INTO import_batches (entity_type, file_name, actor_admin_id)
        VALUES ($1, $2, $3)
@@ -265,8 +292,10 @@ async function processRows(
     for (let index = 0; index < rows.length; index += 1) {
       const row = rows[index];
       const rowNumber = index + 2;
+      const savepointName = `import_row_${index + 1}`;
+      await client.query(`SAVEPOINT ${savepointName}`);
       try {
-        const outcome = await rowHandler(client, row, rowNumber, adminId);
+        const outcome = await rowHandler(client, row, rowNumber, adminId, resolvedElectionId);
         if (outcome.electionId) {
           electionIds.add(outcome.electionId);
         }
@@ -284,7 +313,11 @@ async function processRows(
         } else {
           summary.skippedRows += 1;
         }
+
+        await client.query(`RELEASE SAVEPOINT ${savepointName}`);
       } catch (error) {
+        await client.query(`ROLLBACK TO SAVEPOINT ${savepointName}`);
+        await client.query(`RELEASE SAVEPOINT ${savepointName}`);
         summary.skippedRows += 1;
         summary.errors.push({
           rowNumber,
@@ -315,48 +348,23 @@ async function processRows(
   return summary;
 }
 
-export async function importSpreadsheet(kind: ImportKind, file: UploadedImportFile, actorEmail?: string) {
+export async function importSpreadsheet(
+  kind: ImportKind,
+  file: UploadedImportFile,
+  actorEmail?: string,
+  selectedElectionId?: string | null,
+) {
   switch (kind) {
-    case 'elections':
-      return processRows(kind, file, actorEmail, async (client, row, _rowNumber, adminId) => {
-        const title = normalizeValue(row.title);
-        const startAt = normalizeValue(row.start_at);
-        const endAt = normalizeValue(row.end_at);
-        if (!title || !startAt || !endAt) {
-          throw new Error('title, start_at, and end_at are required');
-        }
-
-        const inserted = await client.query(
-          `INSERT INTO elections (
-             title, description, start_at, end_at, status, created_by_admin_id
-           )
-           VALUES ($1, $2, $3, $4, $5::election_status, $6)
-           ON CONFLICT DO NOTHING
-           RETURNING id`,
-          [title, normalizeNullable(row.description), startAt, endAt, normalizeElectionStatus(row.status), adminId],
-        );
-
-        const id = (inserted.rows[0] as { id: string } | undefined)?.id;
-        return {
-          status: id ? 'inserted' : 'skipped',
-          targetTable: id ? 'elections' : undefined,
-          targetId: id,
-          electionId: id || null,
-        };
-      });
-
     case 'districts':
-      return processRows(kind, file, actorEmail, async (client, row) => {
-        const electionTitle = normalizeValue(row.election_title);
+      return processRows(kind, file, actorEmail, selectedElectionId, async (client, row, _rowNumber, _adminId, resolvedElectionId) => {
         const districtName = normalizeValue(row.district_name);
         const districtCode = normalizeValue(row.district_code);
         const seatsCount = normalizeInteger(row.seats_count);
-        if (!electionTitle || !districtName || !districtCode || !seatsCount) {
-          throw new Error('election_title, district_name, district_code, and seats_count are required');
+        if (!districtName || !districtCode || !seatsCount) {
+          throw new Error('district_name, district_code, and seats_count are required');
         }
 
-        const electionId = await lookupElectionIdByTitle(client, electionTitle);
-        if (!electionId) throw new Error(`Election "${electionTitle}" was not found`);
+        const electionId = await resolveImportElectionId(client, row, resolvedElectionId);
 
         const inserted = await client.query(
           `INSERT INTO districts (election_id, name, code, seats_count)
@@ -371,14 +379,12 @@ export async function importSpreadsheet(kind: ImportKind, file: UploadedImportFi
       });
 
     case 'quotas':
-      return processRows(kind, file, actorEmail, async (client, row) => {
-        const electionTitle = normalizeValue(row.election_title);
+      return processRows(kind, file, actorEmail, selectedElectionId, async (client, row, _rowNumber, _adminId, resolvedElectionId) => {
         const quotaName = normalizeValue(row.quota_name);
         const districtCode = normalizeNullable(row.district_code);
-        if (!electionTitle || !quotaName) throw new Error('election_title and quota_name are required');
+        if (!quotaName) throw new Error('quota_name is required');
 
-        const electionId = await lookupElectionIdByTitle(client, electionTitle);
-        if (!electionId) throw new Error(`Election "${electionTitle}" was not found`);
+        const electionId = await resolveImportElectionId(client, row, resolvedElectionId);
 
         let districtId: string | null = null;
         if (districtCode) {
@@ -400,16 +406,14 @@ export async function importSpreadsheet(kind: ImportKind, file: UploadedImportFi
       });
 
     case 'parties':
-      return processRows(kind, file, actorEmail, async (client, row) => {
-        const electionTitle = normalizeValue(row.election_title);
+      return processRows(kind, file, actorEmail, selectedElectionId, async (client, row, _rowNumber, _adminId, resolvedElectionId) => {
         const partyName = normalizeValue(row.party_name);
         const partyCode = normalizeValue(row.party_code);
-        if (!electionTitle || !partyName || !partyCode) {
-          throw new Error('election_title, party_name, and party_code are required');
+        if (!partyName || !partyCode) {
+          throw new Error('party_name and party_code are required');
         }
 
-        const electionId = await lookupElectionIdByTitle(client, electionTitle);
-        if (!electionId) throw new Error(`Election "${electionTitle}" was not found`);
+        const electionId = await resolveImportElectionId(client, row, resolvedElectionId);
 
         const inserted = await client.query(
           `INSERT INTO parties (election_id, party_name, party_code, logo_url, description)
@@ -424,19 +428,17 @@ export async function importSpreadsheet(kind: ImportKind, file: UploadedImportFi
       });
 
     case 'party_candidates':
-      return processRows(kind, file, actorEmail, async (client, row) => {
-        const electionTitle = normalizeValue(row.election_title);
+      return processRows(kind, file, actorEmail, selectedElectionId, async (client, row, _rowNumber, _adminId, resolvedElectionId) => {
         const partyCode = normalizeValue(row.party_code);
         const fullName = normalizeValue(row.full_name);
         const nationalId = normalizeValue(row.national_id);
         const candidateOrder = normalizeInteger(row.candidate_order);
         const gender = normalizeGender(row.gender);
-        if (!electionTitle || !partyCode || !fullName || !nationalId || !candidateOrder || !gender) {
+        if (!partyCode || !fullName || !nationalId || !candidateOrder || !gender) {
           throw new Error('Missing required party candidate fields');
         }
 
-        const electionId = await lookupElectionIdByTitle(client, electionTitle);
-        if (!electionId) throw new Error(`Election "${electionTitle}" was not found`);
+        const electionId = await resolveImportElectionId(client, row, resolvedElectionId);
         const partyId = await lookupParty(client, electionId, partyCode);
         if (!partyId) throw new Error(`Party "${partyCode}" was not found`);
         const quotaId = await lookupQuota(client, electionId, null, normalizeNullable(row.quota_name));
@@ -461,17 +463,15 @@ export async function importSpreadsheet(kind: ImportKind, file: UploadedImportFi
       });
 
     case 'district_lists':
-      return processRows(kind, file, actorEmail, async (client, row) => {
-        const electionTitle = normalizeValue(row.election_title);
+      return processRows(kind, file, actorEmail, selectedElectionId, async (client, row, _rowNumber, _adminId, resolvedElectionId) => {
         const districtCode = normalizeValue(row.district_code);
         const listName = normalizeValue(row.list_name);
         const listCode = normalizeValue(row.list_code);
-        if (!electionTitle || !districtCode || !listName || !listCode) {
-          throw new Error('election_title, district_code, list_name, and list_code are required');
+        if (!districtCode || !listName || !listCode) {
+          throw new Error('district_code, list_name, and list_code are required');
         }
 
-        const electionId = await lookupElectionIdByTitle(client, electionTitle);
-        if (!electionId) throw new Error(`Election "${electionTitle}" was not found`);
+        const electionId = await resolveImportElectionId(client, row, resolvedElectionId);
         const district = await lookupDistrict(client, electionId, districtCode);
         if (!district) throw new Error(`District "${districtCode}" was not found`);
 
@@ -493,8 +493,7 @@ export async function importSpreadsheet(kind: ImportKind, file: UploadedImportFi
       });
 
     case 'district_list_candidates':
-      return processRows(kind, file, actorEmail, async (client, row) => {
-        const electionTitle = normalizeValue(row.election_title);
+      return processRows(kind, file, actorEmail, selectedElectionId, async (client, row, _rowNumber, _adminId, resolvedElectionId) => {
         const districtCode = normalizeValue(row.district_code);
         const listCode = normalizeValue(row.list_code);
         const fullName = normalizeValue(row.full_name);
@@ -502,12 +501,11 @@ export async function importSpreadsheet(kind: ImportKind, file: UploadedImportFi
         const candidateOrder = normalizeInteger(row.candidate_order);
         const candidateNumber = normalizeInteger(row.candidate_number);
         const gender = normalizeGender(row.gender);
-        if (!electionTitle || !districtCode || !listCode || !fullName || !nationalId || !candidateOrder || !gender) {
+        if (!districtCode || !listCode || !fullName || !nationalId || !candidateOrder || !gender) {
           throw new Error('Missing required district list candidate fields');
         }
 
-        const electionId = await lookupElectionIdByTitle(client, electionTitle);
-        if (!electionId) throw new Error(`Election "${electionTitle}" was not found`);
+        const electionId = await resolveImportElectionId(client, row, resolvedElectionId);
         const district = await lookupDistrict(client, electionId, districtCode);
         if (!district) throw new Error(`District "${districtCode}" was not found`);
         const districtListId = await lookupDistrictList(client, electionId, district.id, listCode);
@@ -543,19 +541,17 @@ export async function importSpreadsheet(kind: ImportKind, file: UploadedImportFi
       });
 
     case 'voters':
-      return processRows(kind, file, actorEmail, async (client, row) => {
-        const electionTitle = normalizeValue(row.election_title);
+      return processRows(kind, file, actorEmail, selectedElectionId, async (client, row, _rowNumber, _adminId, resolvedElectionId) => {
         const districtCode = normalizeValue(row.district_code);
         const fullName = normalizeValue(row.full_name);
         const nationalId = normalizeValue(row.national_id);
         const gender = normalizeGender(row.gender);
         const birthDate = normalizeDate(row.birth_date);
-        if (!electionTitle || !districtCode || !fullName || !nationalId) {
-          throw new Error('election_title, district_code, full_name, and national_id are required');
+        if (!districtCode || !fullName || !nationalId) {
+          throw new Error('district_code, full_name, and national_id are required');
         }
 
-        const electionId = await lookupElectionIdByTitle(client, electionTitle);
-        if (!electionId) throw new Error(`Election "${electionTitle}" was not found`);
+        const electionId = await resolveImportElectionId(client, row, resolvedElectionId);
         const district = await lookupDistrict(client, electionId, districtCode);
         if (!district) throw new Error(`District "${districtCode}" was not found`);
 

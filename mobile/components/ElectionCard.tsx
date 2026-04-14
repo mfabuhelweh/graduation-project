@@ -1,5 +1,6 @@
-import { StyleSheet, View } from "react-native";
-import { Button, Card, Chip, Divider, Text } from "react-native-paper";
+import { StyleSheet, TouchableOpacity, View } from "react-native";
+import { Text } from "react-native-paper";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors } from "@/constants/colors";
 import type { Election } from "@/types";
 import {
@@ -20,118 +21,198 @@ export function ElectionCard({
   actionLabel = "عرض التفاصيل"
 }: ElectionCardProps) {
   const phase = resolveElectionPhase(election);
-  const chipMode =
-    phase === "active"
-      ? "flat"
-      : phase === "ended"
-        ? "outlined"
-        : "flat";
+
+  const phaseConfig = {
+    active: {
+      color: colors.success,
+      bg: colors.successBg,
+      icon: "vote" as const,
+      label: getElectionStatusLabel(election)
+    },
+    upcoming: {
+      color: colors.warning,
+      bg: colors.warningBg,
+      icon: "clock-outline" as const,
+      label: getElectionStatusLabel(election)
+    },
+    ended: {
+      color: colors.textMuted,
+      bg: colors.surfaceAlt,
+      icon: "check-circle-outline" as const,
+      label: getElectionStatusLabel(election)
+    }
+  };
+
+  const cfg =
+    phaseConfig[phase as keyof typeof phaseConfig] || phaseConfig.ended;
 
   return (
-    <Card style={styles.card} onPress={onPress}>
-      <Card.Content style={styles.content}>
-        <View style={styles.headerRow}>
-          <Chip
-            compact
-            mode={chipMode}
-            textStyle={styles.chipText}
-            style={[
-              styles.chip,
-              phase === "active"
-                ? styles.activeChip
-                : phase === "ended"
-                  ? styles.endedChip
-                  : styles.upcomingChip
-            ]}
-          >
-            {getElectionStatusLabel(election)}
-          </Chip>
-          <View style={styles.titleGroup}>
-            <Text variant="titleMedium" style={styles.title}>
-              {election.title}
+    <TouchableOpacity
+      style={styles.card}
+      onPress={onPress}
+      activeOpacity={0.8}
+    >
+      {/* شريط الحالة العلوي */}
+      <View style={[styles.statusBar, { backgroundColor: cfg.color }]} />
+
+      <View style={styles.body}>
+        {/* رأس البطاقة */}
+        <View style={styles.header}>
+          {/* شارة الحالة */}
+          <View style={[styles.badge, { backgroundColor: cfg.bg }]}>
+            <MaterialCommunityIcons name={cfg.icon} size={13} color={cfg.color} />
+            <Text style={[styles.badgeText, { color: cfg.color }]}>
+              {cfg.label}
             </Text>
-            {election.description ? (
-              <Text numberOfLines={2} variant="bodySmall" style={styles.description}>
-                {election.description}
-              </Text>
-            ) : null}
+          </View>
+
+          {/* العنوان */}
+          <Text style={styles.title} numberOfLines={2}>
+            {election.title}
+          </Text>
+        </View>
+
+        {/* الوصف */}
+        {election.description ? (
+          <Text style={styles.description} numberOfLines={2}>
+            {election.description}
+          </Text>
+        ) : null}
+
+        {/* التواريخ */}
+        <View style={styles.meta}>
+          <View style={styles.metaItem}>
+            <Text style={styles.metaValue}>{formatDate(election.endAt)}</Text>
+            <Text style={styles.metaKey}>انتهاء</Text>
+          </View>
+          <View style={styles.metaDivider} />
+          <View style={styles.metaItem}>
+            <Text style={styles.metaValue}>{formatDate(election.startAt)}</Text>
+            <Text style={styles.metaKey}>بداية</Text>
           </View>
         </View>
 
-        <Divider style={styles.divider} />
-
-        <View style={styles.metaSection}>
-          <Text variant="bodySmall" style={styles.metaLabel}>
-            يبدأ: {formatDate(election.startAt)}
+        {/* زر الإجراء */}
+        <TouchableOpacity
+          style={[
+            styles.actionButton,
+            phase === "active"
+              ? styles.actionButtonActive
+              : styles.actionButtonDefault
+          ]}
+          onPress={onPress}
+          activeOpacity={0.85}
+        >
+          <MaterialCommunityIcons
+            name={phase === "active" ? "vote-outline" : "arrow-left"}
+            size={16}
+            color={phase === "active" ? "#fff" : colors.primary}
+          />
+          <Text
+            style={[
+              styles.actionLabel,
+              { color: phase === "active" ? "#fff" : colors.primary }
+            ]}
+          >
+            {actionLabel}
           </Text>
-          <Text variant="bodySmall" style={styles.metaLabel}>
-            ينتهي: {formatDate(election.endAt)}
-          </Text>
-        </View>
-
-        <Button mode="contained" onPress={onPress} style={styles.button}>
-          {actionLabel}
-        </Button>
-      </Card.Content>
-    </Card>
+        </TouchableOpacity>
+      </View>
+    </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: colors.surface
+    backgroundColor: colors.surface,
+    borderRadius: 18,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: colors.border
   },
-  content: {
-    gap: 12
+  statusBar: {
+    height: 3
   },
-  headerRow: {
-    flexDirection: "row-reverse",
-    alignItems: "flex-start",
-    gap: 12
+  body: {
+    padding: 18,
+    gap: 14
   },
-  titleGroup: {
-    flex: 1,
+  header: {
     alignItems: "flex-end",
-    gap: 6
+    gap: 10
   },
-  title: {
-    textAlign: "right",
-    color: colors.text,
+  badge: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
+    alignSelf: "flex-end"
+  },
+  badgeText: {
+    fontSize: 12,
     fontWeight: "700"
   },
-  description: {
+  title: {
+    color: colors.text,
+    fontWeight: "800",
     textAlign: "right",
-    color: colors.textMuted,
-    lineHeight: 20
+    fontSize: 17,
+    lineHeight: 26
   },
-  chip: {
-    alignSelf: "flex-start"
+  description: {
+    color: colors.textSoft,
+    textAlign: "right",
+    lineHeight: 20,
+    fontSize: 13
   },
-  chipText: {
-    fontSize: 12
+  meta: {
+    flexDirection: "row-reverse",
+    backgroundColor: colors.backgroundCard,
+    borderRadius: 12,
+    padding: 14,
+    justifyContent: "center",
+    gap: 16
   },
-  activeChip: {
-    backgroundColor: "#dff4f1"
+  metaItem: {
+    alignItems: "center",
+    gap: 3,
+    flex: 1
   },
-  endedChip: {
-    borderColor: "#cbd5e1"
-  },
-  upcomingChip: {
-    backgroundColor: "#fff7ed"
-  },
-  divider: {
+  metaDivider: {
+    width: 1,
     backgroundColor: colors.border
   },
-  metaSection: {
-    alignItems: "flex-end",
-    gap: 4
+  metaKey: {
+    color: colors.textMuted,
+    fontSize: 11,
+    fontWeight: "600"
   },
-  metaLabel: {
-    textAlign: "right",
-    color: colors.textMuted
+  metaValue: {
+    color: colors.textSoft,
+    fontSize: 12,
+    fontWeight: "500",
+    textAlign: "center"
   },
-  button: {
-    marginTop: 4,
+  actionButton: {
+    flexDirection: "row-reverse",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 12,
+    borderRadius: 12
+  },
+  actionButtonActive: {
     backgroundColor: colors.primary
+  },
+  actionButtonDefault: {
+    backgroundColor: colors.primaryGlow,
+    borderWidth: 1,
+    borderColor: colors.primary + "50"
+  },
+  actionLabel: {
+    fontWeight: "700",
+    fontSize: 14
   }
 });

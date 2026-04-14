@@ -268,9 +268,12 @@ export async function fetchImportBatches(electionId?: string) {
   return response.data;
 }
 
-export async function uploadImportFile(kind: string, file: File) {
+export async function uploadImportFile(kind: string, file: File, electionId?: string) {
   const formData = new FormData();
   formData.append('file', file);
+  if (electionId) {
+    formData.append('electionId', electionId);
+  }
   const response = await request<ApiResponse<any>>(`/admin/import/${kind}`, {
     method: 'POST',
     body: formData,
@@ -335,6 +338,24 @@ export async function loginWithBackend(email: string, password: string) {
 
 export async function loginWithGoogleCredential(credential: string) {
   const response = await apiFetch('/auth/google', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ credential }),
+  });
+  const body = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(body?.message || `API request failed with status ${response.status}`);
+  }
+
+  if (body?.data?.token) {
+    storeAuthToken(body.data.token);
+  }
+
+  return body.data;
+}
+
+export async function loginAdminWithGoogleCredential(credential: string) {
+  const response = await apiFetch('/auth/admin/google', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ credential }),

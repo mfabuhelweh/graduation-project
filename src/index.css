@@ -7,9 +7,97 @@
 }
 
 @layer base {
-  body {
-    @apply font-sans bg-slate-50 text-slate-900;
+  :root {
+    --app-bg: #f8fafc;
+    --app-bg-elevated: #ffffff;
+    --app-bg-soft: #f1f5f9;
+    --app-border: #e2e8f0;
+    --app-border-soft: #f1f5f9;
+    --app-text: #0f172a;
+    --app-text-muted: #64748b;
   }
+
+  :root[data-theme='dark'] {
+    --app-bg: #020617;
+    --app-bg-elevated: #0f172a;
+    --app-bg-soft: #1e293b;
+    --app-border: #334155;
+    --app-border-soft: #1e293b;
+    --app-text: #e2e8f0;
+    --app-text-muted: #94a3b8;
+  }
+
+  html {
+    background-color: var(--app-bg);
+  }
+
+  body {
+    @apply font-sans;
+    background:
+      radial-gradient(circle at top, rgba(59, 130, 246, 0.08), transparent 28%),
+      var(--app-bg);
+    color: var(--app-text);
+    transition:
+      background-color 220ms ease,
+      color 220ms ease;
+  }
+}
+
+.app-shell {
+  background-color: transparent;
+  color: var(--app-text);
+}
+
+:root[data-theme='dark'] .bg-slate-50,
+:root[data-theme='dark'] .bg-white,
+:root[data-theme='dark'] .bg-white\/95 {
+  background-color: var(--app-bg-elevated) !important;
+}
+
+:root[data-theme='dark'] .bg-slate-100 {
+  background-color: var(--app-bg-soft) !important;
+}
+
+:root[data-theme='dark'] .border-slate-200 {
+  border-color: var(--app-border) !important;
+}
+
+:root[data-theme='dark'] .border-slate-100 {
+  border-color: var(--app-border-soft) !important;
+}
+
+:root[data-theme='dark'] .text-slate-900,
+:root[data-theme='dark'] .text-slate-800 {
+  color: var(--app-text) !important;
+}
+
+:root[data-theme='dark'] .text-slate-700,
+:root[data-theme='dark'] .text-slate-600,
+:root[data-theme='dark'] .text-slate-500,
+:root[data-theme='dark'] .text-slate-400 {
+  color: var(--app-text-muted) !important;
+}
+
+:root[data-theme='dark'] .hover\:bg-slate-50:hover,
+:root[data-theme='dark'] .hover\:bg-slate-100:hover,
+:root[data-theme='dark'] .hover\:bg-slate-200:hover {
+  background-color: #1e293b !important;
+}
+
+:root[data-theme='dark'] .active\:bg-slate-100:active,
+:root[data-theme='dark'] .active\:bg-slate-300:active {
+  background-color: #334155 !important;
+}
+
+:root[data-theme='dark'] input,
+:root[data-theme='dark'] select,
+:root[data-theme='dark'] textarea {
+  color: var(--app-text);
+}
+
+:root[data-theme='dark'] input::placeholder,
+:root[data-theme='dark'] textarea::placeholder {
+  color: #64748b;
 }
 
 @keyframes marquee {

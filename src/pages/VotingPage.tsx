@@ -18,6 +18,7 @@ interface VotingPageProps {
   initialNationalId?: string;
   voterName?: string;
   lockNationalId?: boolean;
+  language?: 'ar' | 'en';
   onVoteComplete: (payload: {
     nationalId: string;
     partyId: string;
@@ -34,8 +35,11 @@ export const VotingPage = ({
   initialNationalId,
   voterName,
   lockNationalId = false,
+  language = 'ar',
   onVoteComplete,
 }: VotingPageProps) => {
+  const isArabic = language === 'ar';
+  const t = (ar: string, en: string) => (isArabic ? ar : en);
   const [step, setStep] = React.useState<Step>(0);
   const [nationalId, setNationalId] = React.useState(initialNationalId || '');
   const [isVerifying, setIsVerifying] = React.useState(false);
@@ -54,30 +58,30 @@ export const VotingPage = ({
     }
   }, [initialNationalId]);
 
-  const displayName = voterName?.trim() || 'المستخدم';
+  const displayName = voterName?.trim() || t('المستخدم', 'User');
   const parties = ballotOptions?.parties || [];
   const districtLists = ballotOptions?.districtLists || [];
   const selectionLimit = Number(ballotOptions?.districtCandidateSelectionCount || 1);
   const selectedList = districtLists.find((item: any) => item.id === selectedDistrictList);
 
   const progressSteps = [
-    'بيانات سند',
-    'التحقق من الهوية',
-    'الحزب الوطني',
-    'القائمة المحلية',
-    'مرشحو القائمة',
-    'المراجعة',
-    'تم',
+    t('بيانات سند', 'SANAD Data'),
+    t('التحقق من الهوية', 'Identity Check'),
+    t('الحزب الوطني', 'National Party'),
+    t('القائمة المحلية', 'Local List'),
+    t('مرشحو القائمة', 'List Candidates'),
+    t('المراجعة', 'Review'),
+    t('تم', 'Done'),
   ];
 
   const handleSanadLinkedVerification = async () => {
     if (!electionId) {
-      setVerificationMessage('لا يوجد انتخاب مرتبط بصفحة التصويت حاليًا.');
+      setVerificationMessage(t('لا يوجد انتخاب مرتبط بصفحة التصويت حاليًا.', 'No election is currently linked to this voting page.'));
       return;
     }
 
     if (nationalId.length !== 10) {
-      setVerificationMessage('تعذر قراءة الرقم الوطني من جلسة سند الحالية.');
+      setVerificationMessage(t('تعذر قراءة الرقم الوطني من جلسة سند الحالية.', 'Unable to read national ID from current SANAD session.'));
       return;
     }
 
@@ -101,18 +105,18 @@ export const VotingPage = ({
       const missingDistrictLists = !options.districtLists?.length;
 
       if (missingParties && missingDistrictLists) {
-        setVerificationMessage('تم التحقق التجريبي، لكن لا توجد أحزاب أو قوائم محلية جاهزة لهذا الانتخاب.');
+        setVerificationMessage(t('تم التحقق التجريبي، لكن لا توجد أحزاب أو قوائم محلية جاهزة لهذا الانتخاب.', 'Verification succeeded, but no parties or local lists are configured for this election.'));
       } else if (missingParties) {
-        setVerificationMessage('تم التحقق التجريبي، لكن لا توجد أحزاب وطنية متاحة في هذا الانتخاب.');
+        setVerificationMessage(t('تم التحقق التجريبي، لكن لا توجد أحزاب وطنية متاحة في هذا الانتخاب.', 'Verification succeeded, but no national parties are available.'));
       } else if (missingDistrictLists) {
-        setVerificationMessage('تم التحقق التجريبي، لكن لا توجد قوائم محلية متاحة لدائرتك.');
+        setVerificationMessage(t('تم التحقق التجريبي، لكن لا توجد قوائم محلية متاحة لدائرتك.', 'Verification succeeded, but no local lists are available for your district.'));
       } else {
-        setVerificationMessage('تمت مقارنة صورة الوجه التجريبية مع صورة الوجه في سند وإصدار رمز الاقتراع بنجاح.');
+        setVerificationMessage(t('تمت مقارنة صورة الوجه التجريبية مع صورة الوجه في سند وإصدار رمز الاقتراع بنجاح.', 'Face match simulation succeeded and voting token was issued.'));
       }
 
       setStep(2);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'فشل التحقق من الهوية.';
+      const message = error instanceof Error ? error.message : t('فشل التحقق من الهوية.', 'Identity verification failed.');
       setVerificationMessage(message);
       setVerificationScore(null);
     } finally {
@@ -134,22 +138,22 @@ export const VotingPage = ({
 
   const handleSubmitVote = async () => {
     if (!selectedParty) {
-      setVerificationMessage('اختر حزبًا وطنيًا واحدًا قبل المتابعة.');
+      setVerificationMessage(t('اختر حزبًا وطنيًا واحدًا قبل المتابعة.', 'Select one national party before continuing.'));
       return;
     }
 
     if (!selectedDistrictList) {
-      setVerificationMessage('اختر قائمة محلية واحدة من دائرتك.');
+      setVerificationMessage(t('اختر قائمة محلية واحدة من دائرتك.', 'Select one local list from your district.'));
       return;
     }
 
     if (!selectedDistrictCandidates.length) {
-      setVerificationMessage('اختر مرشحًا واحدًا على الأقل من القائمة المحلية المحددة.');
+      setVerificationMessage(t('اختر مرشحًا واحدًا على الأقل من القائمة المحلية المحددة.', 'Select at least one candidate from the selected local list.'));
       return;
     }
 
     if (!votingToken) {
-      setVerificationMessage('رمز الاقتراع غير متاح. أعد التحقق من الهوية أولًا.');
+      setVerificationMessage(t('رمز الاقتراع غير متاح. أعد التحقق من الهوية أولًا.', 'Voting token is unavailable. Verify identity first.'));
       return;
     }
 
@@ -165,7 +169,7 @@ export const VotingPage = ({
       setStep(6);
     } catch (error) {
       setVerificationMessage(
-        error instanceof Error ? error.message : 'تعذر إرسال الصوت. حاول مرة أخرى.',
+        error instanceof Error ? error.message : t('تعذر إرسال الصوت. حاول مرة أخرى.', 'Unable to submit vote. Please try again.'),
       );
     } finally {
       setIsSubmitting(false);
@@ -181,7 +185,7 @@ export const VotingPage = ({
     'touch-manipulation inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-slate-900 px-5 py-3.5 text-base font-black text-white hover:bg-slate-800 active:opacity-90 disabled:opacity-60 md:w-auto md:py-3 md:text-sm';
 
   return (
-    <div className="mx-auto max-w-6xl space-y-4 md:space-y-6" dir="rtl">
+    <div className="mx-auto max-w-6xl space-y-4 md:space-y-6" dir={isArabic ? 'rtl' : 'ltr'}>
       <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm md:rounded-3xl md:p-5">
         <div className="-mx-1 overflow-x-auto overscroll-x-contain pb-1 [-webkit-overflow-scrolling:touch]">
           <div className="flex min-w-max items-center gap-3 px-1 md:flex-wrap md:gap-4">
@@ -220,10 +224,13 @@ export const VotingPage = ({
             <div className="rounded-2xl bg-[linear-gradient(135deg,#238b84,#32b67a)] p-4 text-white md:rounded-[28px] md:p-6">
               <div className="flex items-start justify-between gap-3 md:gap-4">
                 <div className="min-w-0 text-right">
-                  <p className="text-xs font-bold text-white/80 md:text-sm">مرحبًا بك في التصويت الإلكتروني</p>
+                  <p className="text-xs font-bold text-white/80 md:text-sm">{t('مرحبًا بك في التصويت الإلكتروني', 'Welcome to e-voting')}</p>
                   <h2 className="mt-2 break-words text-2xl font-black md:text-3xl">{displayName}</h2>
                   <p className="mt-3 text-xs leading-6 text-white/85 md:text-sm md:leading-7">
-                    تم التعرف عليك من خلال حساب سند المرتبط بالرقم الوطني المستخدم في تسجيل الدخول.
+                    {t(
+                      'تم التعرف عليك من خلال حساب سند المرتبط بالرقم الوطني المستخدم في تسجيل الدخول.',
+                      'You were identified through your SANAD account linked to the national ID used at sign in.',
+                    )}
                   </p>
                 </div>
                 <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white/15 md:h-16 md:w-16 md:rounded-2xl">
@@ -234,13 +241,15 @@ export const VotingPage = ({
 
             <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 md:gap-4">
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 md:p-5">
-                <p className="text-xs font-bold text-slate-400">الاسم المرتبط بسند</p>
+                <p className="text-xs font-bold text-slate-400">{t('الاسم المرتبط بسند', 'Name linked to SANAD')}</p>
                 <p className="mt-2 break-words text-base font-black text-slate-900 md:mt-3 md:text-lg">{displayName}</p>
               </div>
 
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 md:p-5">
-                <p className="text-xs font-bold text-slate-400">الرقم الوطني</p>
+                <p className="text-xs font-bold text-slate-400">{t('الرقم الوطني', 'National ID')}</p>
                 <input
+                  aria-label={t('الرقم الوطني', 'National ID')}
+                  title={t('الرقم الوطني', 'National ID')}
                   value={nationalId}
                   maxLength={10}
                   disabled={lockNationalId}
@@ -251,8 +260,8 @@ export const VotingPage = ({
               </div>
 
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:col-span-2 md:col-span-1 md:p-5">
-                <p className="text-xs font-bold text-slate-400">حالة الجلسة</p>
-                <p className="mt-2 text-base font-black text-[#238b84] md:mt-3 md:text-lg">موثقة عبر سند</p>
+                <p className="text-xs font-bold text-slate-400">{t('حالة الجلسة', 'Session status')}</p>
+                <p className="mt-2 text-base font-black text-[#238b84] md:mt-3 md:text-lg">{t('موثقة عبر سند', 'Verified via SANAD')}</p>
               </div>
             </div>
 
@@ -262,7 +271,7 @@ export const VotingPage = ({
                 onClick={() => setStep(1)}
                 className="touch-manipulation min-h-12 w-full rounded-2xl bg-[#238b84] px-5 py-3.5 text-base font-black text-white hover:bg-[#1f7c76] active:opacity-90 md:w-auto md:py-3 md:text-sm"
               >
-                متابعة إلى التحقق من الهوية
+                {t('متابعة إلى التحقق من الهوية', 'Continue to identity verification')}
               </button>
             </div>
           </div>
@@ -272,17 +281,19 @@ export const VotingPage = ({
           <div className="space-y-6 text-right">
             <div className="flex items-center gap-3">
               <Fingerprint className="h-7 w-7 shrink-0 text-[#238b84] md:h-6 md:w-6" />
-              <h2 className="text-lg font-black text-slate-900 md:text-xl">التحقق من الهوية</h2>
+              <h2 className="text-lg font-black text-slate-900 md:text-xl">{t('التحقق من الهوية', 'Identity verification')}</h2>
             </div>
 
             <p className="text-sm leading-7 text-slate-500 md:text-sm">
-              سنستخدم في هذه الخطوة صورة الوجه التجريبية للمستخدم الحالي، ثم نقارنها مع صورة الوجه المرتبطة بسند لإتمام
-              التحقق بشكل تجريبي.
+              {t(
+                'سنستخدم في هذه الخطوة صورة الوجه التجريبية للمستخدم الحالي، ثم نقارنها مع صورة الوجه المرتبطة بسند لإتمام التحقق بشكل تجريبي.',
+                'In this step, we use a simulated face image of the current user and compare it with SANAD face data for demo verification.',
+              )}
             </p>
 
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 md:rounded-3xl md:p-5">
               <p className="text-sm font-black leading-snug text-slate-900">
-                صورة الوجه التي ستتم مقارنتها مع صورة الوجه في سند - وضع تجريبي
+                {t('صورة الوجه التي ستتم مقارنتها مع صورة الوجه في سند - وضع تجريبي', 'Face image to compare with SANAD - demo mode')}
               </p>
               <div className="mt-4 flex h-52 items-center justify-center rounded-2xl bg-white md:h-64 md:rounded-3xl">
                 <div className="flex flex-col items-center gap-3 text-center">
@@ -290,25 +301,30 @@ export const VotingPage = ({
                     <UserRound className="h-12 w-12" />
                   </div>
                   <p className="text-base font-black text-slate-800">{displayName}</p>
-                  <p className="text-xs text-slate-500">مطابقة تجريبية مع صورة الوجه المرتبطة بسند</p>
+                  <p className="text-xs text-slate-500">{t('مطابقة تجريبية مع صورة الوجه المرتبطة بسند', 'Demo match with SANAD face data')}</p>
                 </div>
               </div>
-              <p className="mt-4 text-xs font-bold text-slate-500">هذه البطاقة تمثل صورة الوجه الحالية التي ستتم مقارنتها مع صورة سند بشكل تجريبي.</p>
+              <p className="mt-4 text-xs font-bold text-slate-500">
+                {t(
+                  'هذه البطاقة تمثل صورة الوجه الحالية التي ستتم مقارنتها مع صورة سند بشكل تجريبي.',
+                  'This card represents the current face image that will be compared with SANAD data in demo mode.',
+                )}
+              </p>
             </div>
 
             <div className="rounded-2xl border border-dashed border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-800">
-              التحقق هنا تجريبي الآن، وتتم المقارنة اعتمادًا على بيانات جلسة سند الحالية.
+              {t('التحقق هنا تجريبي الآن، وتتم المقارنة اعتمادًا على بيانات جلسة سند الحالية.', 'Verification here is in demo mode and uses the current SANAD session data.')}
             </div>
 
             {verificationScore !== null && (
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm font-black text-slate-800">
-                درجة المطابقة الحالية: {verificationScore}%
+                {t('درجة المطابقة الحالية', 'Current match score')}: {verificationScore}%
               </div>
             )}
 
             <div className={actionRow}>
               <button type="button" onClick={() => setStep(0)} className={btnBack}>
-                رجوع
+                {t('رجوع', 'Back')}
               </button>
 
               <button
@@ -318,7 +334,7 @@ export const VotingPage = ({
                 className={btnPrimary}
               >
                 {isVerifying ? <Loader2 className="h-5 w-5 animate-spin" /> : <Sparkles className="h-5 w-5 md:h-4 md:w-4" />}
-                بدء التحقق التجريبي
+                {t('بدء التحقق التجريبي', 'Start verification')}
               </button>
             </div>
           </div>
@@ -328,9 +344,9 @@ export const VotingPage = ({
           <div className="space-y-5 text-right md:space-y-6">
             <div className="flex items-center gap-3">
               <Vote className="h-7 w-7 shrink-0 text-[#238b84] md:h-6 md:w-6" />
-              <h2 className="text-lg font-black leading-snug text-slate-900 md:text-xl">أولًا: التصويت للحزب الوطني</h2>
+              <h2 className="text-lg font-black leading-snug text-slate-900 md:text-xl">{t('أولًا: التصويت للحزب الوطني', 'First: vote for national party')}</h2>
             </div>
-            <p className="text-sm leading-relaxed text-slate-500">اختر حزبًا وطنيًا واحدًا فقط على مستوى المملكة.</p>
+            <p className="text-sm leading-relaxed text-slate-500">{t('اختر حزبًا وطنيًا واحدًا فقط على مستوى المملكة.', 'Select exactly one national party.')}</p>
 
             {parties.length ? (
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:gap-4 xl:grid-cols-3">
@@ -350,7 +366,7 @@ export const VotingPage = ({
                       <div className="min-w-0 text-right">
                         <h3 className="text-base font-black text-slate-900 md:text-lg">{party.name}</h3>
                         <p className="mt-1 text-xs leading-relaxed text-slate-500 md:text-xs">
-                          {party.description || 'حزب وطني مشارك في هذه الانتخابات'}
+                          {party.description || t('حزب وطني مشارك في هذه الانتخابات', 'National party participating in this election')}
                         </p>
                       </div>
                     </div>
@@ -359,16 +375,16 @@ export const VotingPage = ({
               </div>
             ) : (
               <div className="rounded-2xl border border-amber-100 bg-amber-50 p-4 text-sm font-bold text-amber-800">
-                لا توجد أحزاب وطنية متاحة في هذا الانتخاب.
+                {t('لا توجد أحزاب وطنية متاحة في هذا الانتخاب.', 'No national parties are available for this election.')}
               </div>
             )}
 
             <div className={actionRow}>
               <button type="button" onClick={() => setStep(1)} className={btnBack}>
-                رجوع
+                {t('رجوع', 'Back')}
               </button>
               <button type="button" onClick={() => setStep(3)} className={btnPrimary}>
-                التالي: القائمة المحلية
+                {t('التالي: القائمة المحلية', 'Next: local list')}
               </button>
             </div>
           </div>
@@ -378,10 +394,10 @@ export const VotingPage = ({
           <div className="space-y-5 text-right md:space-y-6">
             <div className="flex items-center gap-3">
               <Vote className="h-7 w-7 shrink-0 text-[#238b84] md:h-6 md:w-6" />
-              <h2 className="text-lg font-black leading-snug text-slate-900 md:text-xl">ثانيًا: اختيار القائمة المحلية</h2>
+              <h2 className="text-lg font-black leading-snug text-slate-900 md:text-xl">{t('ثانيًا: اختيار القائمة المحلية', 'Second: choose local list')}</h2>
             </div>
             <p className="text-sm leading-relaxed text-slate-500">
-              تظهر هنا فقط القوائم التابعة لدائرتك: {ballotOptions?.voterDistrict?.name || 'غير محددة'}.
+              {t('تظهر هنا فقط القوائم التابعة لدائرتك', 'Only lists from your district are shown here')}: {ballotOptions?.voterDistrict?.name || t('غير محددة', 'Not specified')}.
             </p>
 
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2 md:gap-4">
@@ -401,9 +417,9 @@ export const VotingPage = ({
                   )}
                 >
                   <h3 className="text-base font-black text-slate-900">{list.name}</h3>
-                  <p className="mt-2 text-xs text-slate-500">{list.description || 'قائمة محلية ضمن دائرة الناخب'}</p>
+                  <p className="mt-2 text-xs text-slate-500">{list.description || t('قائمة محلية ضمن دائرة الناخب', 'Local list within voter district')}</p>
                   <p className="mt-3 text-xs font-bold text-slate-400">
-                    {list.districtName} - {list.candidates?.length || 0} مرشح
+                    {list.districtName} - {list.candidates?.length || 0} {t('مرشح', 'candidates')}
                   </p>
                 </button>
               ))}
@@ -411,16 +427,16 @@ export const VotingPage = ({
 
             {!districtLists.length && (
               <div className="rounded-2xl border border-amber-100 bg-amber-50 p-4 text-sm font-bold text-amber-800">
-                لا توجد قوائم محلية لهذه الدائرة داخل هذا الانتخاب.
+                {t('لا توجد قوائم محلية لهذه الدائرة داخل هذا الانتخاب.', 'No local lists for this district in this election.')}
               </div>
             )}
 
             <div className={actionRow}>
               <button type="button" onClick={() => setStep(2)} className={btnBack}>
-                رجوع
+                {t('رجوع', 'Back')}
               </button>
               <button type="button" onClick={() => setStep(4)} className={btnPrimary}>
-                التالي: مرشحو القائمة
+                {t('التالي: مرشحو القائمة', 'Next: candidates')}
               </button>
             </div>
           </div>
@@ -431,15 +447,15 @@ export const VotingPage = ({
             <div className="flex items-center gap-3">
               <CheckCircle2 className="h-7 w-7 shrink-0 text-[#238b84] md:h-6 md:w-6" />
               <h2 className="text-lg font-black leading-snug text-slate-900 md:text-xl">
-                ثالثًا: اختيار مرشحي القائمة المحلية
+                {t('ثالثًا: اختيار مرشحي القائمة المحلية', 'Third: choose local list candidates')}
               </h2>
             </div>
             <p className="text-sm leading-relaxed text-slate-500">
-              يمكنك اختيار {selectionLimit} مرشح كحد أقصى من نفس القائمة فقط.
+              {t('يمكنك اختيار', 'You can select')} {selectionLimit} {t('مرشح كحد أقصى من نفس القائمة فقط.', 'candidate(s) at most from the same list.')}
             </p>
 
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm font-bold text-slate-700">
-              القائمة المختارة: {selectedList?.name || 'لم يتم اختيار قائمة بعد'}
+              {t('القائمة المختارة', 'Selected list')}: {selectedList?.name || t('لم يتم اختيار قائمة بعد', 'No list selected yet')}
             </div>
 
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2 md:gap-4">
@@ -460,8 +476,8 @@ export const VotingPage = ({
                     <div className="min-w-0 text-right">
                       <p className="text-base font-black text-slate-900">{candidate.fullName}</p>
                       <p className="mt-1 text-xs text-slate-500">
-                        الترتيب {candidate.candidateOrder}
-                        {candidate.candidateNumber ? ` - الرقم ${candidate.candidateNumber}` : ''}
+                        {t('الترتيب', 'Order')} {candidate.candidateOrder}
+                        {candidate.candidateNumber ? ` - ${t('الرقم', 'No.')} ${candidate.candidateNumber}` : ''}
                       </p>
                     </div>
                     <div
@@ -479,16 +495,16 @@ export const VotingPage = ({
 
             {!selectedList?.candidates?.length && (
               <div className="rounded-2xl border border-amber-100 bg-amber-50 p-4 text-sm font-bold text-amber-800">
-                لا يوجد مرشحون داخل القائمة المختارة، أو لم يتم اختيار قائمة بعد.
+                {t('لا يوجد مرشحون داخل القائمة المختارة، أو لم يتم اختيار قائمة بعد.', 'No candidates in selected list, or no list selected yet.')}
               </div>
             )}
 
             <div className={actionRow}>
               <button type="button" onClick={() => setStep(3)} className={btnBack}>
-                رجوع
+                {t('رجوع', 'Back')}
               </button>
               <button type="button" onClick={() => setStep(5)} className={btnPrimary}>
-                مراجعة الاختيارات
+                {t('مراجعة الاختيارات', 'Review choices')}
               </button>
             </div>
           </div>
@@ -498,35 +514,35 @@ export const VotingPage = ({
           <div className="space-y-5 text-right md:space-y-6">
             <div className="flex items-center gap-3">
               <Shield className="h-7 w-7 shrink-0 text-[#238b84] md:h-6 md:w-6" />
-              <h2 className="text-lg font-black text-slate-900 md:text-xl">مراجعة نهائية قبل الإرسال</h2>
+              <h2 className="text-lg font-black text-slate-900 md:text-xl">{t('مراجعة نهائية قبل الإرسال', 'Final review before submit')}</h2>
             </div>
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4 md:gap-4">
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 md:p-5">
-                <p className="text-xs font-bold text-slate-400">الناخب</p>
+                <p className="text-xs font-bold text-slate-400">{t('الناخب', 'Voter')}</p>
                 <p className="mt-2 break-words font-black text-slate-900 md:mt-3">{displayName}</p>
               </div>
 
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 md:p-5">
-                <p className="text-xs font-bold text-slate-400">الرقم الوطني</p>
+                <p className="text-xs font-bold text-slate-400">{t('الرقم الوطني', 'National ID')}</p>
                 <p className="mt-2 font-black text-slate-900 md:mt-3">{nationalId}</p>
               </div>
 
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 md:p-5">
-                <p className="text-xs font-bold text-slate-400">الحزب الوطني</p>
+                <p className="text-xs font-bold text-slate-400">{t('الحزب الوطني', 'National party')}</p>
                 <p className="mt-2 break-words font-black text-slate-900 md:mt-3">
-                  {parties.find((party: any) => party.id === selectedParty)?.name || 'غير محدد'}
+                  {parties.find((party: any) => party.id === selectedParty)?.name || t('غير محدد', 'Not selected')}
                 </p>
               </div>
 
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:col-span-2 md:col-span-1 md:p-5">
-                <p className="text-xs font-bold text-slate-400">القائمة المحلية</p>
-                <p className="mt-2 break-words font-black text-slate-900 md:mt-3">{selectedList?.name || 'غير محددة'}</p>
+                <p className="text-xs font-bold text-slate-400">{t('القائمة المحلية', 'Local list')}</p>
+                <p className="mt-2 break-words font-black text-slate-900 md:mt-3">{selectedList?.name || t('غير محددة', 'Not selected')}</p>
               </div>
             </div>
 
             <div className="rounded-2xl border border-slate-200 bg-white p-4 md:p-5">
-              <p className="text-xs font-bold text-slate-400">مرشحو القائمة المحلية المختارون</p>
+              <p className="text-xs font-bold text-slate-400">{t('مرشحو القائمة المحلية المختارون', 'Selected local list candidates')}</p>
               <div className="mt-3 space-y-2">
                 {(selectedList?.candidates || [])
                   .filter((candidate: any) => selectedDistrictCandidates.includes(candidate.id))
@@ -543,11 +559,11 @@ export const VotingPage = ({
 
             <div className={actionRow}>
               <button type="button" onClick={() => setStep(4)} className={btnBack}>
-                رجوع
+                {t('رجوع', 'Back')}
               </button>
               <button type="button" onClick={handleSubmitVote} disabled={isSubmitting} className={btnDanger}>
                 {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : <CheckCircle2 className="h-5 w-5 md:h-4 md:w-4" />}
-                تأكيد وإرسال الصوت
+                {t('تأكيد وإرسال الصوت', 'Confirm and submit vote')}
               </button>
             </div>
           </div>
@@ -558,9 +574,12 @@ export const VotingPage = ({
             <div className="mx-auto flex h-[4.5rem] w-[4.5rem] items-center justify-center rounded-full bg-emerald-500 text-white md:h-20 md:w-20">
               <CheckCircle2 className="h-11 w-11 md:h-10 md:w-10" />
             </div>
-            <h2 className="text-xl font-black text-slate-900 md:text-2xl">تم تسجيل صوتك بنجاح</h2>
+            <h2 className="text-xl font-black text-slate-900 md:text-2xl">{t('تم تسجيل صوتك بنجاح', 'Your vote was recorded successfully')}</h2>
             <p className="mx-auto max-w-md px-1 text-sm leading-7 text-slate-500">
-              شكرًا {displayName}. تم حفظ الصوت بشكل مجهول وربط الجلسة فقط بمعاملة التصويت دون طلب الرقم الوطني منك مرة أخرى.
+              {t(
+                `شكرًا ${displayName}. تم حفظ الصوت بشكل مجهول وربط الجلسة فقط بمعاملة التصويت دون طلب الرقم الوطني منك مرة أخرى.`,
+                `Thank you ${displayName}. Your vote is stored anonymously and linked only to the voting transaction.`,
+              )}
             </p>
           </div>
         )}
