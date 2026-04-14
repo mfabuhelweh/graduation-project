@@ -3,8 +3,10 @@ import { adminDb } from '../config/firebaseAdmin.js';
 import { env } from '../config/env.js';
 import { createId, memoryStore } from '../data/memoryStore.js';
 import { query, usePostgres, withTransaction } from '../db/pool.js';
+import type { AuthenticatedUser } from '../middleware/authMiddleware.js';
 import type { Voter } from '../models/voter.model.js';
 import { addAuditLog } from './audit.service.js';
+import { isElectionActiveForVoting } from '../utils/electionState.js';
 import { createOpaqueToken, hashToken } from '../utils/token.js';
 
 const collection = adminDb.collection('voters');
@@ -72,6 +74,61 @@ export async function getVoterByNationalId(nationalId: string, electionId?: stri
   if (snapshot.empty) return null;
   const doc = snapshot.docs[0];
   return { id: doc.id, ...doc.data() };
+}
+
+export async function getCurrentVoterProfile(authenticatedUser: AuthenticatedUser) {
+  if (
+    authenticatedUser.role !== "voter" ||
+    !authenticatedUser.nationalId ||
+    !authenticatedUser.electionId
+  ) {
+    throw new Error("Voter authentication is required");
+  }
+
+  if (!usePostgres) {
+    const fallback = await getVoterByNationalId(
+      authenticatedUser.nationalId,
+      authenticatedUser.electionId
+    );
+    if (!fallback) return null;
+
+    return {
+      ...fallback,
+      role: "voter",
+      email: fallback.email || authenticatedUser.email || "",
+      uid: authenticatedUser.uid,
+      electionTitle: undefined,
+      districtName: undefined,
+      districtCode: undefined
+    };
+  }
+
+  const result = await query(
+    `SELECT v.*,
+            d.name AS district_name,
+            d.code AS district_code,
+            e.title AS election_title
+     FROM voters v
+     JOIN districts d ON d.id = v.district_id
+     JOIN elections e ON e.id = v.election_id
+     WHERE v.election_id = $1
+       AND v.national_id = $2
+     LIMIT 1`,
+    [authenticatedUser.electionId, authenticatedUser.nationalId]
+  );
+
+  const row = result.rows[0];
+  if (!row) return null;
+
+  return {
+    ...mapVoterRow(row),
+    uid: authenticatedUser.uid,
+    role: "voter",
+    email: row.email || authenticatedUser.email || "",
+    districtName: row.district_name,
+    districtCode: row.district_code,
+    electionTitle: row.election_title
+  };
 }
 
 export async function createVoter(data: Voter, actor = 'system') {
@@ -197,34 +254,36 @@ export async function verifyFaceAndIssueToken(
     nationalId: string;
     idCardImageUrl?: string;
     liveCaptureImageUrl?: string;
-    similarityScore?: number;
   },
+  authenticatedUser: AuthenticatedUser,
   actor = 'system',
 ) {
   if (!data.electionId || !data.nationalId) {
     throw new Error('electionId and nationalId are required');
   }
 
-  if (env.enableMemoryStore) {
-    let voter = await getVoterByNationalId(data.nationalId, data.electionId);
+  if (
+    authenticatedUser.role !== 'voter' ||
+    !authenticatedUser.nationalId ||
+    !authenticatedUser.electionId
+  ) {
+    throw new Error('Voter authentication is required');
+  }
 
-    if (!voter) {
-      const id = createId('voter');
-      const now = new Date().toISOString();
-      voter = {
-        id,
-        nationalId: data.nationalId,
-        electionId: data.electionId,
-        districtId: 'default',
-        fullName: `Voter ${data.nationalId}`,
-        hasVoted: false,
-        verifiedFace: false,
-        status: 'eligible',
-        createdAt: now,
-        updatedAt: now,
-      };
-      memoryStore.voters.set(id, voter as any);
-    }
+  if (
+    authenticatedUser.nationalId !== data.nationalId ||
+    authenticatedUser.electionId !== data.electionId
+  ) {
+    throw new Error('Authenticated voter does not match the requested ballot');
+  }
+
+  if (!env.enableDevAuth) {
+    throw new Error('Face verification is not configured on the server');
+  }
+
+  if (env.enableMemoryStore) {
+    const voter = await getVoterByNationalId(data.nationalId, data.electionId);
+    if (!voter) throw new Error('Voter is not registered');
 
     if ((voter as any).hasVoted) throw new Error('Voter has already voted');
     if ((voter as any).status === 'blocked') throw new Error('Voter is blocked');
@@ -234,7 +293,7 @@ export async function verifyFaceAndIssueToken(
     await addAuditLog('token.issued', actor, `Issued memory voting token for ${data.electionId}`);
     return {
       success: true,
-      score: data.similarityScore ?? 96,
+      score: 96,
       votingToken: rawToken,
       expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
     };
@@ -247,13 +306,15 @@ export async function verifyFaceAndIssueToken(
   const rawToken = createOpaqueToken();
   const tokenHash = hashToken(rawToken);
   const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
-  const score = data.similarityScore ?? 96;
-  const passed = score >= 90;
+  const score = 96;
+  const passed = true;
 
   const result = await withTransaction(async (client) => {
     const voterResult = await client.query(
       `SELECT v.*,
               e.status AS election_status,
+              e.start_at,
+              e.end_at,
               d.name AS district_name,
               d.code AS district_code,
               d.seats_count
@@ -264,43 +325,18 @@ export async function verifyFaceAndIssueToken(
        FOR UPDATE`,
       [data.electionId, data.nationalId],
     );
-    let voter = voterResult.rows[0];
-
-    // Dev mode auto-registration: register voter if not found and dev auth is enabled
-    if (!voter && env.enableDevAuth) {
-      const districtResult = await client.query(
-        `SELECT d.id FROM districts d WHERE d.election_id = $1 ORDER BY d.created_at ASC LIMIT 1`,
-        [data.electionId],
-      );
-      const districtId = districtResult.rows[0]?.id;
-      if (!districtId) throw new Error('No districts found for this election');
-
-      const insertResult = await client.query(
-        `INSERT INTO voters (election_id, district_id, full_name, national_id, has_voted, verified_face, status)
-         VALUES ($1, $2, $3, $4, false, false, 'eligible')
-         ON CONFLICT (election_id, national_id) DO UPDATE SET updated_at = now()
-         RETURNING *`,
-        [data.electionId, districtId, `Dev Voter (${data.nationalId})`, data.nationalId],
-      );
-
-      // Re-fetch with joins
-      const reResult = await client.query(
-        `SELECT v.*,
-                e.status AS election_status,
-                d.name AS district_name,
-                d.code AS district_code,
-                d.seats_count
-         FROM voters v
-         JOIN elections e ON e.id = v.election_id
-         JOIN districts d ON d.id = v.district_id
-         WHERE v.id = $1`,
-        [insertResult.rows[0].id],
-      );
-      voter = reResult.rows[0];
-    }
+    const voter = voterResult.rows[0];
 
     if (!voter) throw new Error('Voter is not registered');
-    if (voter.election_status !== 'active') throw new Error('Election is not active');
+    if (
+      !isElectionActiveForVoting({
+        status: voter.election_status,
+        startAt: voter.start_at,
+        endAt: voter.end_at,
+      })
+    ) {
+      throw new Error('Election is not active');
+    }
     if (voter.status === 'blocked') throw new Error('Voter is blocked');
     if (voter.has_voted) throw new Error('Voter has already voted');
 

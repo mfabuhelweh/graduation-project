@@ -2,6 +2,8 @@ import { adminDb } from '../config/firebaseAdmin.js';
 import { env } from '../config/env.js';
 import { memoryStore } from '../data/memoryStore.js';
 import { query, usePostgres } from '../db/pool.js';
+import type { AuthenticatedUser } from '../middleware/authMiddleware.js';
+import { canExposeResults } from '../utils/electionState.js';
 
 async function getVoterDemographicsMetadata() {
   const columnsResult = await query<{ column_name: string }>(
@@ -23,7 +25,88 @@ async function getVoterDemographicsMetadata() {
   };
 }
 
-export async function getElectionResults(electionId: string) {
+function assertResultsVisibility(
+  election:
+    | {
+        status?: string | null;
+        startAt?: string | null;
+        endAt?: string | null;
+        allowResultsVisibilityBeforeClose?: boolean | null;
+      }
+    | undefined
+    | null,
+  user?: AuthenticatedUser,
+) {
+  if (!election) {
+    throw new Error('Election not found');
+  }
+
+  if (user?.role === 'admin') {
+    return election;
+  }
+
+  if (canExposeResults(election)) {
+    return election;
+  }
+
+  throw new Error('Results are hidden until the election is closed');
+}
+
+async function assertResultsAccess(electionId: string, user?: AuthenticatedUser) {
+  if (env.enableMemoryStore) {
+    const election = memoryStore.elections.get(electionId) as
+      | {
+          status?: string;
+          startAt?: string;
+          endAt?: string;
+          allowResultsVisibilityBeforeClose?: boolean;
+        }
+      | undefined;
+    return assertResultsVisibility(election, user);
+  }
+
+  if (!usePostgres) {
+    const snapshot = await adminDb.collection('elections').doc(electionId).get();
+    const election = snapshot.exists
+      ? {
+          status: snapshot.get('status'),
+          startAt: snapshot.get('startAt'),
+          endAt: snapshot.get('endAt'),
+          allowResultsVisibilityBeforeClose: snapshot.get('allowResultsVisibilityBeforeClose'),
+        }
+      : null;
+    return assertResultsVisibility(election, user);
+  }
+
+  const result = await query<{
+    status: string;
+    start_at: string | null;
+    end_at: string | null;
+    allow_results_visibility_before_close: boolean;
+  }>(
+    `SELECT status, start_at, end_at, allow_results_visibility_before_close
+     FROM elections
+     WHERE id = $1
+     LIMIT 1`,
+    [electionId],
+  );
+
+  return assertResultsVisibility(
+    result.rows[0]
+      ? {
+          status: result.rows[0].status,
+          startAt: result.rows[0].start_at,
+          endAt: result.rows[0].end_at,
+          allowResultsVisibilityBeforeClose: result.rows[0].allow_results_visibility_before_close,
+        }
+      : null,
+    user,
+  );
+}
+
+export async function getElectionResults(electionId: string, user?: AuthenticatedUser) {
+  await assertResultsAccess(electionId, user);
+
   if (env.enableMemoryStore) {
     const votes = Array.from(memoryStore.votes.values()).filter((vote: any) => vote.electionId === electionId);
     const parties = new Map<string, number>();
@@ -142,22 +225,33 @@ export async function getElectionResults(electionId: string) {
               ROW_NUMBER() OVER (ORDER BY pvt.total_votes DESC, pvt.party_name) AS party_rank
        FROM party_vote_totals pvt
      ),
+     ranked_candidates AS (
+       SELECT pc.id,
+              pc.full_name AS name,
+              pc.candidate_order AS "candidateOrder",
+              p.party_name AS "partyName",
+              rp.total_votes AS "partyVotes",
+              ROW_NUMBER() OVER (
+                ORDER BY pc.candidate_order, rp.party_rank, p.party_name, pc.full_name
+              ) AS overall_rank
+       FROM ranked_parties rp
+       JOIN parties p ON p.id = rp.id
+       JOIN party_candidates pc ON pc.party_id = p.id
+     ),
      party_seat_limit AS (
        SELECT total_national_party_seats
        FROM elections
        WHERE id = $1
      )
-     SELECT pc.id,
-            pc.full_name AS name,
-            pc.candidate_order AS "candidateOrder",
-            p.party_name AS "partyName",
-            rp.total_votes AS "partyVotes"
-     FROM ranked_parties rp
-     JOIN party_seat_limit psl ON true
-     JOIN parties p ON p.id = rp.id
-     JOIN party_candidates pc ON pc.party_id = p.id
-     WHERE pc.candidate_order <= psl.total_national_party_seats
-     ORDER BY rp.total_votes DESC, p.party_name, pc.candidate_order`,
+     SELECT rc.id,
+            rc.name,
+            rc."candidateOrder",
+            rc."partyName",
+            rc."partyVotes"
+     FROM ranked_candidates rc
+     CROSS JOIN party_seat_limit psl
+     WHERE rc.overall_rank <= psl.total_national_party_seats
+     ORDER BY rc.overall_rank`,
     [electionId],
   );
 

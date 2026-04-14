@@ -1,6 +1,11 @@
 import { Timestamp } from 'firebase-admin/firestore';
 import { adminDb } from '../config/firebaseAdmin.js';
 import { env } from '../config/env.js';
+import {
+  LOCAL_SYSTEM_ELECTION_TITLE,
+  VISIBLE_SYSTEM_ELECTION_TITLES,
+  isVisibleSystemElectionTitle,
+} from '../constants/systemElections.js';
 import { createId, memoryStore } from '../data/memoryStore.js';
 import { query, usePostgres, withTransaction } from '../db/pool.js';
 import type { Election, ElectionStatus } from '../models/election.model.js';
@@ -15,7 +20,7 @@ type ElectionInput = Partial<Election> & {
 
 const FIXED_SYSTEM_ELECTIONS = [
   {
-    title: 'انتخابات مجلس النواب الأردني 2024 - الدوائر المحلية',
+    title: LOCAL_SYSTEM_ELECTION_TITLE,
     description: 'انتخابات تجريبية لمجلس النواب الأردني تشمل القوائم المحلية في جميع الدوائر الانتخابية لاختبار نظام التصويت الإلكتروني',
     status: 'active' as ElectionStatus,
     enableParties: true,
@@ -25,18 +30,9 @@ const FIXED_SYSTEM_ELECTIONS = [
     showTurnoutPublicly: true,
     allowResultsVisibilityBeforeClose: false,
   },
-  {
-    title: 'انتخابات مجلس النواب الأردني 2024 - القوائم الحزبية',
-    description: 'انتخابات تجريبية لمجلس النواب الأردني تشمل الأحزاب الوطنية على مستوى المملكة لاختبار نظام التصويت الإلكتروني',
-    status: 'active' as ElectionStatus,
-    enableParties: true,
-    enableDistrictLists: true,
-    districtCandidateSelectionCount: 3,
-    totalNationalPartySeats: 41,
-    showTurnoutPublicly: true,
-    allowResultsVisibilityBeforeClose: false,
-  },
 ] as const;
+
+const DELETED_FIXED_ELECTIONS_SETTING_KEY = 'deleted_fixed_elections';
 
 const legacyStatusToDb: Record<string, ElectionStatus> = {
   Draft: 'draft',
@@ -125,18 +121,29 @@ async function ensureFixedSystemElections() {
   const adminId = await resolveAdminId();
   if (!adminId) return;
 
+  const deletedFixedResult = await query<{ value: Record<string, boolean> | null }>(
+    `SELECT value
+     FROM system_settings
+     WHERE key = $1
+     LIMIT 1`,
+    [DELETED_FIXED_ELECTIONS_SETTING_KEY],
+  );
+  const deletedFixedElections = deletedFixedResult.rows[0]?.value || {};
+  const fixedElectionsToEnsure = FIXED_SYSTEM_ELECTIONS.filter((item) => !deletedFixedElections[item.title]);
+  if (!fixedElectionsToEnsure.length) return;
+
   const existingResult = await query<{ title: string }>(
     `SELECT title
      FROM elections
      WHERE title = ANY($1::text[])`,
-    [FIXED_SYSTEM_ELECTIONS.map((item) => item.title)],
+    [fixedElectionsToEnsure.map((item) => item.title)],
   );
 
   const existingTitles = new Set(existingResult.rows.map((row) => row.title));
   const startAt = new Date('2026-04-11T08:00:00+03:00').toISOString();
   const endAt = new Date('2026-12-31T19:00:00+03:00').toISOString();
 
-  for (const election of FIXED_SYSTEM_ELECTIONS) {
+  for (const election of fixedElectionsToEnsure) {
     if (existingTitles.has(election.title)) continue;
 
     await query(
@@ -173,16 +180,32 @@ async function ensureFixedSystemElections() {
   }
 }
 
+async function rememberDeletedFixedElection(title?: string | null) {
+  if (!title || !isVisibleSystemElectionTitle(title) || !usePostgres) return;
+
+  await query(
+    `INSERT INTO system_settings (key, value)
+     VALUES ($1, jsonb_build_object($2::text, true))
+     ON CONFLICT (key)
+     DO UPDATE SET
+       value = system_settings.value || jsonb_build_object($2::text, true),
+       updated_at = now()`,
+    [DELETED_FIXED_ELECTIONS_SETTING_KEY, title],
+  );
+}
+
 export async function listElections() {
   if (env.enableMemoryStore) {
-    return Array.from(memoryStore.elections.values()).sort((a, b) =>
-      String(b.createdAt).localeCompare(String(a.createdAt)),
-    );
+    return Array.from(memoryStore.elections.values())
+      .filter((election: any) => isVisibleSystemElectionTitle(election.title))
+      .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
   }
 
   if (!usePostgres) {
     const snapshot = await adminDb.collection('elections').orderBy('createdAt', 'desc').get();
-    return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    return snapshot.docs
+      .map((doc) => ({ id: doc.id, ...doc.data() }))
+      .filter((election: any) => isVisibleSystemElectionTitle(election.title));
   }
 
   await ensureFixedSystemElections();
@@ -197,7 +220,7 @@ export async function listElections() {
      FROM elections e
      WHERE e.title = ANY($1::text[])
      ORDER BY e.created_at DESC`,
-    [FIXED_SYSTEM_ELECTIONS.map((item) => item.title)],
+    [VISIBLE_SYSTEM_ELECTION_TITLES],
   );
 
   return result.rows.map(mapElectionRow);
@@ -381,6 +404,8 @@ export async function updateElectionStatus(id: string, status: string, actor = '
 }
 
 export async function deleteElection(id: string, actor = 'system') {
+  const current = usePostgres ? await getElection(id) : null;
+
   if (env.enableMemoryStore) {
     memoryStore.elections.delete(id);
     await addAuditLog('election.deleted', actor, `Deleted election ${id}`);
@@ -389,6 +414,7 @@ export async function deleteElection(id: string, actor = 'system') {
 
   if (usePostgres) {
     await query('DELETE FROM elections WHERE id = $1', [id]);
+    await rememberDeletedFixedElection((current as any)?.title);
     await addAuditLog('election.deleted', actor, `Deleted election ${id}`);
     return { id };
   }

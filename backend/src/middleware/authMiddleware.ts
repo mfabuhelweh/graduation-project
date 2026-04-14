@@ -13,6 +13,16 @@ export interface AuthenticatedUser {
   electionId?: string;
 }
 
+function isLoopbackAddress(address?: string | null) {
+  if (!address) return false;
+  const normalized = address.replace(/^::ffff:/, '');
+  return normalized === '127.0.0.1' || normalized === '::1';
+}
+
+function isLocalDevRequest(req: Request) {
+  return isLoopbackAddress(req.ip) || isLoopbackAddress(req.socket.remoteAddress);
+}
+
 declare global {
   namespace Express {
     interface Request {
@@ -29,7 +39,7 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
     if (!token) {
       const devAuthHeader = req.header('X-Dev-Auth') || req.header('x-dev-auth');
       const devRoleHeader = req.header('X-Dev-Role') || req.header('x-dev-role');
-      if (env.enableDevAuth && devAuthHeader?.toLowerCase() === 'true') {
+      if (env.enableDevAuth && isLocalDevRequest(req) && devAuthHeader?.toLowerCase() === 'true') {
         const fallbackEmail = devRoleHeader === 'admin' ? 'local-admin@example.com' : 'local-voter@example.com';
         let role = devRoleHeader === 'admin' ? 'admin' : 'voter';
         if (usePostgres) {

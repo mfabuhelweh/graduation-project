@@ -82,7 +82,13 @@ export async function postImport(req: Request, res: Response) {
     return res.status(400).json({ success: false, message: 'Upload a CSV or XLSX file in the "file" field' });
   }
 
-  const summary = await importSpreadsheet(kind as keyof typeof IMPORT_TEMPLATES, req.file, req.user?.email);
+  const electionId =
+    typeof req.body?.electionId === 'string'
+      ? req.body.electionId
+      : typeof req.query.electionId === 'string'
+        ? req.query.electionId
+        : null;
+  const summary = await importSpreadsheet(kind as keyof typeof IMPORT_TEMPLATES, req.file, req.user?.email, electionId);
   res.status(201).json({ success: true, data: summary });
 }
 

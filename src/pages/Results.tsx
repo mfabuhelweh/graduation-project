@@ -54,7 +54,9 @@ function pickResultsElection(elections: any[], preferredElectionId?: string | nu
   })[0];
 }
 
-export const Results = ({ isAdmin, setToast, elections = [], preferredElectionId }: ResultsProps) => {
+export const Results = ({ isAdmin, setToast, language = 'ar', elections = [], preferredElectionId }: ResultsProps) => {
+  const isArabic = language === 'ar';
+  const t = (ar: string, en: string) => (isArabic ? ar : en);
   const [view, setView] = React.useState<'general' | 'local'>('general');
   const [results, setResults] = React.useState<any>(null);
   const [loading, setLoading] = React.useState(false);
@@ -63,9 +65,13 @@ export const Results = ({ isAdmin, setToast, elections = [], preferredElectionId
     () => pickResultsElection(elections, preferredElectionId),
     [elections, preferredElectionId],
   );
+  const isGeneralLocked =
+    !isAdmin &&
+    activeElection?.status === 'active' &&
+    !activeElection?.allowResultsVisibilityBeforeClose;
 
   const load = React.useCallback(async () => {
-    if (!activeElection?.id) {
+    if (!activeElection?.id || isGeneralLocked) {
       setResults(null);
       return;
     }
@@ -84,16 +90,11 @@ export const Results = ({ isAdmin, setToast, elections = [], preferredElectionId
     } finally {
       setLoading(false);
     }
-  }, [activeElection?.id, setToast]);
+  }, [activeElection?.id, isGeneralLocked, setToast]);
 
   React.useEffect(() => {
     load();
   }, [load]);
-
-  const isGeneralLocked =
-    !isAdmin &&
-    activeElection?.status === 'active' &&
-    !activeElection?.allowResultsVisibilityBeforeClose;
 
   const rows = view === 'general' ? results?.parties || [] : results?.districtLists || [];
   const demographics = results?.analytics?.demographics || {};
@@ -132,8 +133,13 @@ export const Results = ({ isAdmin, setToast, elections = [], preferredElectionId
     [rows],
   );
 
+  const touchBtn =
+    'touch-manipulation inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50 active:bg-slate-100 md:min-h-0 md:py-2';
+  const touchBtnPrimary =
+    'touch-manipulation inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-blue-700 active:opacity-90 sm:w-auto md:min-h-0 md:py-2';
+
   return (
-    <div className="space-y-6" dir="rtl">
+    <div className="space-y-5 md:space-y-6" dir="rtl">
       {isGeneralLocked && (
         <Dashboard
           onReset={async () => {}}
@@ -142,80 +148,89 @@ export const Results = ({ isAdmin, setToast, elections = [], preferredElectionId
           setToast={setToast}
           language="ar"
           showActions={false}
-          title="ملخص الاقتراع"
-          subtitle="بيانات عامة متاحة للناخبين أثناء فترة التصويت"
+          title={t('ملخص الاقتراع', 'Election Summary')}
+          subtitle={t('بيانات عامة متاحة للناخبين أثناء فترة التصويت', 'Public data available to voters during the voting period')}
         />
       )}
 
       <div className="space-y-4">
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 text-right shadow-sm">
-            <div className="flex items-center justify-between">
-              <div className="rounded-xl bg-slate-50 p-3 text-blue-600">
-                <Vote className="h-5 w-5" />
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-2 md:gap-4 xl:grid-cols-4">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 text-right shadow-sm md:p-5">
+            <div className="flex items-center justify-between gap-2">
+              <div className="rounded-xl bg-slate-50 p-2.5 text-blue-600 md:p-3">
+                <Vote className="h-5 w-5 md:h-5" />
               </div>
-              <div>
-                <p className="text-xs font-bold text-slate-400">إجمالي المصوتين</p>
-                <p className="mt-3 text-3xl font-black text-slate-900">{results?.totalVotes || 0}</p>
+              <div className="min-w-0">
+                <p className="text-[10px] font-bold text-slate-400 md:text-xs">{t('إجمالي المصوتين', 'Total voters')}</p>
+                <p className="mt-1 text-2xl font-black tabular-nums text-slate-900 md:mt-3 md:text-3xl">
+                  {results?.totalVotes || 0}
+                </p>
               </div>
             </div>
           </div>
 
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 text-right shadow-sm">
-            <div className="flex items-center justify-between">
-              <div className="rounded-xl bg-slate-50 p-3 text-emerald-600">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 text-right shadow-sm md:p-5">
+            <div className="flex items-center justify-between gap-2">
+              <div className="rounded-xl bg-slate-50 p-2.5 text-emerald-600 md:p-3">
                 <MapPinned className="h-5 w-5" />
               </div>
-              <div>
-                <p className="text-xs font-bold text-slate-400">دوائر فيها تصويت</p>
-                <p className="mt-3 text-3xl font-black text-slate-900">{votedDistrictsCount}</p>
+              <div className="min-w-0">
+                <p className="text-[10px] font-bold text-slate-400 md:text-xs">{t('دوائر فيها تصويت', 'Districts with votes')}</p>
+                <p className="mt-1 text-2xl font-black tabular-nums text-slate-900 md:mt-3 md:text-3xl">{votedDistrictsCount}</p>
               </div>
             </div>
           </div>
 
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 text-right shadow-sm">
-            <div className="flex items-center justify-between">
-              <div className="rounded-xl bg-slate-50 p-3 text-amber-500">
+          <div className="col-span-2 rounded-2xl border border-slate-200 bg-white p-4 text-right shadow-sm md:col-span-1 md:p-5 xl:col-span-1">
+            <div className="flex items-center justify-between gap-2">
+              <div className="rounded-xl bg-slate-50 p-2.5 text-amber-500 md:p-3">
                 <Users className="h-5 w-5" />
               </div>
-              <div>
-                <p className="text-xs font-bold text-slate-400">أعلى دائرة تصويتًا</p>
-                <p className="mt-3 text-lg font-black text-slate-900">{topDistrict?.name || 'لا يوجد'}</p>
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] font-bold text-slate-400 md:text-xs">{t('أعلى دائرة تصويتًا', 'Top voting district')}</p>
+                <p className="mt-1 truncate text-base font-black text-slate-900 md:mt-3 md:text-lg" title={topDistrict?.name}>
+                  {topDistrict?.name || t('لا يوجد', 'None')}
+                </p>
               </div>
             </div>
           </div>
 
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 text-right shadow-sm">
-            <div className="flex items-center justify-between">
-              <div className="rounded-xl bg-slate-50 p-3 text-fuchsia-600">
+          <div className="col-span-2 rounded-2xl border border-slate-200 bg-white p-4 text-right shadow-sm md:col-span-1 md:p-5 xl:col-span-1">
+            <div className="flex items-center justify-between gap-2">
+              <div className="rounded-xl bg-slate-50 p-2.5 text-fuchsia-600 md:p-3">
                 <UserRound className="h-5 w-5" />
               </div>
-              <div>
-                <p className="text-xs font-bold text-slate-400">نسبة أعلى دائرة</p>
-                <p className="mt-3 text-3xl font-black text-slate-900">{topDistrict ? `${topDistrict.turnout}%` : '0%'}</p>
+              <div className="min-w-0">
+                <p className="text-[10px] font-bold text-slate-400 md:text-xs">{t('نسبة أعلى دائرة', 'Top district turnout')}</p>
+                <p className="mt-1 text-2xl font-black tabular-nums text-slate-900 md:mt-3 md:text-3xl">
+                  {topDistrict ? `${topDistrict.turnout}%` : '0%'}
+                </p>
               </div>
             </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.2fr,0.8fr]">
-          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm text-right">
-            <div className="flex items-center gap-3">
-              <MapPinned className="h-5 w-5 text-emerald-600" />
-              <h3 className="text-lg font-black text-slate-900">عدد المصوتين من كل دائرة</h3>
+        <div className="grid grid-cols-1 gap-4 md:gap-6 xl:grid-cols-[1.2fr,0.8fr]">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm text-right md:p-6">
+            <div className="flex items-center gap-2 md:gap-3">
+              <MapPinned className="h-5 w-5 shrink-0 text-emerald-600" />
+              <h3 className="text-base font-black leading-snug text-slate-900 md:text-lg">{t('عدد المصوتين من كل دائرة', 'Voters by district')}</h3>
             </div>
 
-            <div className="mt-5 space-y-3">
+            <div className="mt-4 space-y-2 md:mt-5 md:space-y-3">
               {districtTurnout.map((district: any) => (
-                <div key={district.id} className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
-                  <div className="flex items-center justify-between gap-4">
+                <div
+                  key={district.id}
+                  className="rounded-2xl border border-slate-100 bg-slate-50 p-3.5 md:p-4"
+                >
+                  <div className="flex items-center justify-between gap-3">
                     <div className="text-left">
-                      <p className="text-lg font-black text-blue-600">{district.votes}</p>
-                      <p className="mt-1 text-xs text-slate-500">{district.turnout}% نسبة مشاركة</p>
+                      <p className="text-base font-black tabular-nums text-blue-600 md:text-lg">{district.votes}</p>
+                      <p className="mt-0.5 text-[11px] text-slate-500 md:text-xs">{district.turnout}% {t('نسبة مشاركة', 'turnout')}</p>
                     </div>
-                    <div className="text-right">
-                      <p className="font-black text-slate-900">{district.name}</p>
-                      <p className="mt-1 text-xs text-slate-500">{district.registeredVoters} ناخب مسجل</p>
+                    <div className="min-w-0 text-right">
+                      <p className="font-black leading-snug text-slate-900">{district.name}</p>
+                      <p className="mt-1 text-[11px] text-slate-500 md:text-xs">{district.registeredVoters} {t('ناخب مسجل', 'registered voters')}</p>
                     </div>
                   </div>
                 </div>
@@ -223,57 +238,57 @@ export const Results = ({ isAdmin, setToast, elections = [], preferredElectionId
 
               {!districtTurnout.length && (
                 <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4 text-sm font-bold text-slate-500">
-                  لا توجد بيانات دوائر متاحة بعد.
+                  {t('لا توجد بيانات دوائر متاحة بعد.', 'No district data available yet.')}
                 </div>
               )}
             </div>
           </div>
 
-          <div className="space-y-6">
-            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm text-right">
-              <div className="flex items-center gap-3">
-                <Users className="h-5 w-5 text-fuchsia-600" />
-                <h3 className="text-lg font-black text-slate-900">إحصائيات الذكور والإناث</h3>
+          <div className="space-y-4 md:space-y-6">
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm text-right md:p-6">
+              <div className="flex items-center gap-2 md:gap-3">
+                <Users className="h-5 w-5 shrink-0 text-fuchsia-600" />
+                <h3 className="text-base font-black leading-snug text-slate-900 md:text-lg">{t('إحصائيات الذكور والإناث', 'Gender statistics')}</h3>
               </div>
 
               {demographics.genderAvailable ? (
-                <div className="mt-5 space-y-3">
+                <div className="mt-4 space-y-2 md:mt-5 md:space-y-3">
                   {genderBreakdown.map((entry: any) => (
-                    <div key={entry.key} className="rounded-xl bg-slate-50 p-4">
-                      <div className="flex items-center justify-between">
-                        <p className="text-xl font-black text-slate-900">{entry.count}</p>
+                    <div key={entry.key} className="rounded-xl bg-slate-50 p-3.5 md:p-4">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-lg font-black tabular-nums text-slate-900 md:text-xl">{entry.count}</p>
                         <p className="font-black text-slate-700">{entry.label}</p>
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="mt-5 rounded-xl border border-amber-100 bg-amber-50 p-4 text-sm font-bold text-amber-800">
-                  بيانات الجنس غير متوفرة حاليًا لأن جدول الناخبين لا يحتوي هذا الحقل بعد.
+                <div className="mt-4 rounded-xl border border-amber-100 bg-amber-50 p-4 text-sm font-bold leading-relaxed text-amber-800 md:mt-5">
+                  {t('بيانات الجنس غير متوفرة حاليًا لأن جدول الناخبين لا يحتوي هذا الحقل بعد.', 'Gender data is currently unavailable because this field is missing in voter records.')}
                 </div>
               )}
             </div>
 
-            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm text-right">
-              <div className="flex items-center gap-3">
-                <BarChart3 className="h-5 w-5 text-indigo-600" />
-                <h3 className="text-lg font-black text-slate-900">إحصائيات الأعمار</h3>
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm text-right md:p-6">
+              <div className="flex items-center gap-2 md:gap-3">
+                <BarChart3 className="h-5 w-5 shrink-0 text-indigo-600" />
+                <h3 className="text-base font-black leading-snug text-slate-900 md:text-lg">{t('إحصائيات الأعمار', 'Age statistics')}</h3>
               </div>
 
               {demographics.ageAvailable ? (
-                <div className="mt-5 space-y-3">
+                <div className="mt-4 space-y-2 md:mt-5 md:space-y-3">
                   {ageGroups.map((entry: any) => (
-                    <div key={entry.key} className="rounded-xl bg-slate-50 p-4">
-                      <div className="flex items-center justify-between">
-                        <p className="text-xl font-black text-slate-900">{entry.count}</p>
+                    <div key={entry.key} className="rounded-xl bg-slate-50 p-3.5 md:p-4">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-lg font-black tabular-nums text-slate-900 md:text-xl">{entry.count}</p>
                         <p className="font-black text-slate-700">{entry.label}</p>
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="mt-5 rounded-xl border border-amber-100 bg-amber-50 p-4 text-sm font-bold text-amber-800">
-                  بيانات العمر غير متوفرة حاليًا لأن تاريخ الميلاد غير مخزن مع الناخبين بعد.
+                <div className="mt-4 rounded-xl border border-amber-100 bg-amber-50 p-4 text-sm font-bold leading-relaxed text-amber-800 md:mt-5">
+                  {t('بيانات العمر غير متوفرة حاليًا لأن تاريخ الميلاد غير مخزن مع الناخبين بعد.', 'Age data is currently unavailable because birth dates are not stored yet.')}
                 </div>
               )}
             </div>
@@ -281,27 +296,21 @@ export const Results = ({ isAdmin, setToast, elections = [], preferredElectionId
         </div>
       </div>
 
-      <div className="flex items-center justify-between flex-row-reverse">
-        <div className="text-right">
-          <h2 className="text-2xl font-black text-slate-900">النتائج النهائية</h2>
-          <p className="mt-2 text-sm text-slate-500">
-            عرض نتائج الأحزاب الوطنية ونتائج القوائم المحلية بصورة منفصلة.
+      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between md:gap-6 md:flex-row-reverse">
+        <div className="min-w-0 text-right">
+          <h2 className="text-xl font-black text-slate-900 md:text-2xl">{t('النتائج النهائية', 'Final Results')}</h2>
+          <p className="mt-1 text-sm leading-relaxed text-slate-500 md:mt-2">
+            {t('عرض نتائج الأحزاب الوطنية ونتائج القوائم المحلية بصورة منفصلة.', 'National parties and local lists are shown separately.')}
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
-          <button
-            onClick={load}
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50"
-          >
-            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-            تحديث
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end sm:gap-3">
+          <button type="button" onClick={load} className={touchBtn}>
+            <RefreshCw className={`h-4 w-4 shrink-0 ${loading ? 'animate-spin' : ''}`} />
+            {t('تحديث', 'Refresh')}
           </button>
-          <button
-            onClick={() => setView(view === 'general' ? 'local' : 'general')}
-            className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700"
-          >
-            {view === 'general' ? 'نتائج القوائم المحلية' : 'نتائج الأحزاب الوطنية'}
+          <button type="button" onClick={() => setView(view === 'general' ? 'local' : 'general')} className={touchBtnPrimary}>
+            {view === 'general' ? t('نتائج القوائم المحلية', 'Local list results') : t('نتائج الأحزاب الوطنية', 'National party results')}
           </button>
         </div>
       </div>
@@ -310,100 +319,106 @@ export const Results = ({ isAdmin, setToast, elections = [], preferredElectionId
         <div className="rounded-2xl border border-amber-100 bg-amber-50 p-6 text-right shadow-sm">
           <div className="flex items-center gap-3">
             <Lock className="h-5 w-5 text-amber-700" />
-            <h3 className="text-lg font-black text-amber-900">نتائج الأحزاب الوطنية غير متاحة بعد</h3>
+            <h3 className="text-lg font-black text-amber-900">{t('نتائج الأحزاب الوطنية غير متاحة بعد', 'National party results are not available yet')}</h3>
           </div>
           <p className="mt-3 text-sm font-medium text-amber-800">
-            ستظهر للناخبين بعد انتهاء التصويت وإغلاق الانتخاب. الأدمن فقط يمكنه متابعتها أثناء فترة الاقتراع.
+            {t('ستظهر للناخبين بعد انتهاء التصويت وإغلاق الانتخاب. الأدمن فقط يمكنه متابعتها أثناء فترة الاقتراع.', 'They will be visible to voters after voting ends and election closes. Only admins can view them during voting.')}
           </p>
           <button
+            type="button"
             onClick={() => setView('local')}
-            className="mt-4 rounded-xl bg-amber-600 px-4 py-2 text-sm font-bold text-white hover:bg-amber-700"
+            className="mt-4 w-full min-h-11 rounded-xl bg-amber-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-amber-700 touch-manipulation active:opacity-90 sm:w-auto md:min-h-0 md:py-2"
           >
-            عرض نتائج القوائم المحلية
+            {t('عرض نتائج القوائم المحلية', 'Show local list results')}
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.2fr,0.8fr]">
-          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-            <div className="flex items-center gap-3">
-              <BarChart3 className="h-5 w-5 text-blue-600" />
-              <h3 className="text-lg font-black text-slate-900">
-                {view === 'general' ? 'نتائج الأحزاب الوطنية' : 'نتائج القوائم المحلية'}
+        <div className="grid grid-cols-1 gap-4 md:gap-6 xl:grid-cols-[1.2fr,0.8fr]">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:p-6">
+            <div className="flex items-center gap-2 md:gap-3">
+              <BarChart3 className="h-5 w-5 shrink-0 text-blue-600" />
+              <h3 className="text-base font-black leading-snug text-slate-900 md:text-lg">
+                {view === 'general' ? t('نتائج الأحزاب الوطنية', 'National party results') : t('نتائج القوائم المحلية', 'Local list results')}
               </h3>
             </div>
 
-            <div className="mt-6 space-y-3">
+            <div className="mt-4 space-y-2.5 md:mt-6 md:space-y-3">
               {rows.map((row: any, index: number) => (
-                <div key={row.id} className="rounded-2xl border border-slate-100 bg-slate-50 p-4 text-right">
-                  <div className="flex items-center justify-between">
+                <div
+                  key={row.id}
+                  className="rounded-2xl border border-slate-100 bg-slate-50 p-3.5 text-right md:p-4"
+                >
+                  <div className="flex items-start justify-between gap-3">
                     <div className="text-left">
-                      <p className="text-sm font-black text-blue-600">{row.votes}</p>
+                      <p className="text-base font-black tabular-nums text-blue-600 md:text-sm">{row.votes}</p>
                       {view === 'local' && row.districtName && (
-                        <p className="mt-1 text-xs text-slate-500">{row.districtName}</p>
+                        <p className="mt-0.5 text-[11px] text-slate-500 md:text-xs">{row.districtName}</p>
                       )}
                     </div>
-                    <div>
-                      <p className="font-black text-slate-900">{row.name}</p>
-                      <p className="mt-1 text-xs text-slate-500">{row.code || row.districtName || ''}</p>
+                    <div className="min-w-0">
+                      <p className="font-black leading-snug text-slate-900">{row.name}</p>
+                      <p className="mt-1 text-[11px] text-slate-500 md:text-xs">{row.code || row.districtName || ''}</p>
                     </div>
                   </div>
 
-                  <div className="mt-3 h-2 rounded-full bg-slate-200">
+                  <div className="mt-3 h-2.5 rounded-full bg-slate-200 md:h-2">
                     <div
-                      className="h-2 rounded-full bg-blue-600"
+                      className="h-2.5 rounded-full bg-blue-600 md:h-2"
                       style={{
                         width: `${rows.length ? (Number(row.votes || 0) / maxVotes) * 100 : 0}%`,
                       }}
                     />
                   </div>
-                  <p className="mt-2 text-xs font-bold text-slate-400">الترتيب الحالي: #{index + 1}</p>
+                  <p className="mt-2 text-[11px] font-bold text-slate-400 md:text-xs">{t('الترتيب الحالي', 'Current rank')}: #{index + 1}</p>
                 </div>
               ))}
 
               {!rows.length && (
                 <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4 text-sm font-bold text-slate-500">
-                  لا توجد نتائج متاحة بعد.
+                  {t('لا توجد نتائج متاحة بعد.', 'No results available yet.')}
                 </div>
               )}
             </div>
           </div>
 
-          <div className="space-y-6">
-            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm text-right">
-              <div className="flex items-center gap-3">
-                <Vote className="h-5 w-5 text-blue-600" />
-                <h3 className="text-lg font-black text-slate-900">إحصاءات سريعة</h3>
+          <div className="space-y-4 md:space-y-6">
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm text-right md:p-6">
+              <div className="flex items-center gap-2 md:gap-3">
+                <Vote className="h-5 w-5 shrink-0 text-blue-600" />
+                <h3 className="text-base font-black leading-snug text-slate-900 md:text-lg">{t('إحصاءات سريعة', 'Quick stats')}</h3>
               </div>
-              <div className="mt-5 grid grid-cols-1 gap-4">
-                <div className="rounded-xl bg-slate-50 p-4">
-                  <p className="text-xs text-slate-400">إجمالي البطاقات المجهولة</p>
-                  <p className="mt-2 text-2xl font-black text-slate-900">{results?.totalVotes || 0}</p>
+              <div className="mt-4 grid grid-cols-2 gap-3 md:mt-5 md:grid-cols-1 md:gap-4">
+                <div className="rounded-xl bg-slate-50 p-3.5 md:p-4">
+                  <p className="text-[10px] text-slate-400 md:text-xs">{t('إجمالي البطاقات المجهولة', 'Total anonymous ballots')}</p>
+                  <p className="mt-1 text-xl font-black tabular-nums text-slate-900 md:mt-2 md:text-2xl">
+                    {results?.totalVotes || 0}
+                  </p>
                 </div>
-                <div className="rounded-xl bg-slate-50 p-4">
-                  <p className="text-xs text-slate-400">عدد الكيانات المعروضة</p>
-                  <p className="mt-2 text-2xl font-black text-slate-900">{rows.length}</p>
+                <div className="rounded-xl bg-slate-50 p-3.5 md:p-4">
+                  <p className="text-[10px] text-slate-400 md:text-xs">{t('عدد الكيانات المعروضة', 'Displayed entities')}</p>
+                  <p className="mt-1 text-xl font-black tabular-nums text-slate-900 md:mt-2 md:text-2xl">{rows.length}</p>
                 </div>
               </div>
             </div>
 
-            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm text-right">
-              <div className="flex items-center gap-3">
-                <Trophy className="h-5 w-5 text-amber-500" />
-                <h3 className="text-lg font-black text-slate-900">الفائزون التلقائيون للأحزاب</h3>
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm text-right md:p-6">
+              <div className="flex items-center gap-2 md:gap-3">
+                <Trophy className="h-5 w-5 shrink-0 text-amber-500" />
+                <h3 className="text-base font-black leading-snug text-slate-900 md:text-lg">{t('الفائزون التلقائيون للأحزاب', 'Automatic party winners')}</h3>
               </div>
-              <div className="mt-4 space-y-3">
+              <div className="mt-3 space-y-2 md:mt-4 md:space-y-3">
                 {(results?.partyWinners || []).slice(0, 8).map((winner: any) => (
-                  <div key={winner.id} className="rounded-xl border border-slate-100 bg-slate-50 p-4">
-                    <p className="font-black text-slate-900">{winner.name}</p>
-                    <p className="mt-1 text-xs text-slate-500">
-                      {winner.partyName} - الترتيب {winner.candidateOrder}
+                  <div key={winner.id} className="rounded-xl border border-slate-100 bg-slate-50 p-3.5 md:p-4">
+                    <p className="font-black leading-snug text-slate-900">{winner.name}</p>
+                    <p className="mt-1 text-[11px] text-slate-500 md:text-xs">
+                      {winner.partyName} - {t('الترتيب', 'rank')} {winner.candidateOrder}
                     </p>
                   </div>
                 ))}
 
                 {!results?.partyWinners?.length && (
                   <div className="rounded-xl border border-slate-100 bg-slate-50 p-4 text-sm font-bold text-slate-500">
-                    لم تُحتسب نتائج المقاعد الحزبية بعد.
+                    {t('لم تُحتسب نتائج المقاعد الحزبية بعد.', 'Party seat results are not computed yet.')}
                   </div>
                 )}
               </div>

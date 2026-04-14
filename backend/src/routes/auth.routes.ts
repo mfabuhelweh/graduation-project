@@ -1,5 +1,6 @@
 import {Router} from 'express';
 import {
+  postAdminGoogleLogin,
   getMe,
   postGoogleLogin,
   postLogin,
@@ -15,6 +16,7 @@ export const authRoutes = Router();
 
 authRoutes.post('/login', asyncHandler(postLogin));
 authRoutes.post('/google', asyncHandler(postGoogleLogin));
+authRoutes.post('/admin/google', asyncHandler(postAdminGoogleLogin));
 authRoutes.post('/register', asyncHandler(postRegister));
 authRoutes.post('/sanad/start', asyncHandler(postSanadStart));
 authRoutes.post('/sanad/verify-otp', asyncHandler(postSanadVerifyOtp));

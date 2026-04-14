@@ -21,7 +21,6 @@ interface ImportCenterProps {
 }
 
 const labels: Record<string, string> = {
-  elections: 'elections.xlsx',
   districts: 'districts.xlsx',
   quotas: 'quotas.xlsx',
   parties: 'parties.xlsx',
@@ -32,7 +31,6 @@ const labels: Record<string, string> = {
 };
 
 const entityNames: Record<string, string> = {
-  elections: 'الانتخابات',
   districts: 'الدوائر',
   quotas: 'الكوتا',
   parties: 'الأحزاب',
@@ -41,6 +39,24 @@ const entityNames: Record<string, string> = {
   district_list_candidates: 'مرشحو القوائم المحلية',
   voters: 'الناخبون',
 };
+
+const importGroups = [
+  {
+    title: 'Local Election Data',
+    description: 'بيانات الدوائر والقوائم المحلية ومرشحيها',
+    items: ['districts', 'district_lists', 'district_list_candidates'],
+  },
+  {
+    title: 'National Election Data',
+    description: 'بيانات الأحزاب الوطنية ومرشحي الأحزاب',
+    items: ['parties', 'party_candidates'],
+  },
+  {
+    title: 'Shared',
+    description: 'بيانات مشتركة تستخدمها القوائم المحلية والوطنية',
+    items: ['voters', 'quotas'],
+  },
+] as const;
 
 function formatDateTime(value?: string | null) {
   if (!value) return 'غير متوفر';
@@ -126,7 +142,7 @@ export const ImportCenter = ({ electionId, onImported, setToast }: ImportCenterP
 
     setLoadingKey(kind);
     try {
-      const result = await uploadImportFile(kind.replace(/_/g, '-'), file);
+      const result = await uploadImportFile(kind.replace(/_/g, '-'), file, electionId);
       setResults((current) => ({
         ...current,
         [kind]: {
@@ -180,158 +196,174 @@ export const ImportCenter = ({ electionId, onImported, setToast }: ImportCenterP
     }
   };
 
-  const order: string[] = config?.order || [];
+  const availableKinds = new Set<string>(config?.order || Object.keys(labels));
+  const renderImportCard = (kind: string) => {
+    const result = results[kind];
+    const selectedFile = selectedFiles[kind];
+
+    return (
+      <div key={kind} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="flex flex-row-reverse items-start justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <FileSpreadsheet className="mt-1 h-5 w-5 text-blue-600" />
+            <div className="text-right">
+              <p className="font-black text-slate-900">{labels[kind]}</p>
+              <p className="mt-1 text-xs text-slate-500">
+                الأعمدة المطلوبة: {(config?.templates?.[kind] || []).join('، ')}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => handleDownload(kind)}
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"
+            >
+              <Download className="h-4 w-4" />
+              تنزيل القالب
+            </button>
+
+            <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-700">
+              <UploadCloud className="h-4 w-4" />
+              اختيار ملف
+              <input
+                type="file"
+                accept=".csv,.xlsx"
+                className="hidden"
+                onChange={(event) => handleChooseFile(kind, event.target.files?.[0] || null)}
+              />
+            </label>
+          </div>
+        </div>
+
+        {selectedFile && (
+          <div className="mt-4 rounded-xl border border-blue-100 bg-blue-50 p-4 text-right">
+            <div className="flex flex-row-reverse items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-bold text-slate-400">الملف المحدد</p>
+                <p className="mt-1 truncate text-sm font-black text-slate-900">{selectedFile.name}</p>
+                <p className="mt-1 text-xs text-slate-500">
+                  الحجم: {(selectedFile.size / 1024).toFixed(1)} KB
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handleClearFile(kind)}
+                  disabled={loadingKey === kind}
+                  className="inline-flex items-center gap-2 rounded-lg border border-rose-100 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700 hover:bg-rose-100 disabled:opacity-60"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  حذف الملف
+                </button>
+
+                <button
+                  onClick={() => handleUpload(kind)}
+                  disabled={loadingKey === kind}
+                  className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-700 disabled:opacity-60"
+                >
+                  {loadingKey === kind ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <UploadCloud className="h-4 w-4" />
+                  )}
+                  رفع الآن
+                </button>
+              </div>
+            </div>
+
+            <p className="mt-3 text-xs font-medium text-blue-800">
+              يمكنك حذف الملف واختيار نسخة معدلة قبل تنفيذ عملية الاستيراد.
+            </p>
+          </div>
+        )}
+
+        {result && (
+          <div className="mt-4 rounded-xl border border-slate-100 bg-slate-50 p-4 text-right">
+            <div className="mb-4 rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700">
+              آخر ملف تم رفعه: {result.uploadedFileName || result.fileName || labels[kind]}
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+              <div>
+                <p className="text-xs text-slate-400">الصفوف المضافة</p>
+                <p className="mt-1 text-lg font-black text-emerald-600">{result.insertedRows}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-400">الصفوف المتجاوزة</p>
+                <p className="mt-1 text-lg font-black text-amber-600">{result.skippedRows}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-400">أخطاء التحقق</p>
+                <p className="mt-1 text-lg font-black text-rose-600">{result.errors?.length || 0}</p>
+              </div>
+            </div>
+
+            {result.batchId && !result.rolledBackAt && (
+              <div className="mt-4">
+                <button
+                  onClick={() => handleRollbackBatch(result)}
+                  disabled={deletingBatchId === result.batchId}
+                  className="inline-flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-4 py-2 text-xs font-bold text-rose-700 hover:bg-rose-100 disabled:opacity-60"
+                >
+                  {deletingBatchId === result.batchId ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <RotateCcw className="h-4 w-4" />
+                  )}
+                  حذف البيانات التي جاء بها هذا الملف
+                </button>
+              </div>
+            )}
+
+            {result.rollbackNote && (
+              <div className="mt-4 rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-700">
+                {result.rollbackNote}
+              </div>
+            )}
+
+            {result.errors?.length > 0 && (
+              <div className="mt-4 space-y-2">
+                {result.errors.map((error: any) => (
+                  <div
+                    key={`${kind}-${error.rowNumber}-${error.message}`}
+                    className="rounded-lg border border-rose-100 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700"
+                  >
+                    الصف {error.rowNumber}: {error.message}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-5">
       <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-right">
-        <h4 className="text-base font-black text-slate-900">ترتيب الاستيراد المطلوب</h4>
-        <p className="mt-2 text-sm text-slate-500">
-          {order.map((item) => labels[item] || item).join(' ← ')}
+        <h4 className="text-base font-black text-slate-900">مركز استيراد بيانات الانتخاب</h4>
+        <p className="mt-2 text-xs font-bold text-blue-700">
+          يتم ربط كل الملفات بالانتخاب المفتوح حاليًا، لذلك لا تحتاج إلى رفع elections.xlsx أو تعبئة election_title.
         </p>
       </div>
 
-      <div className="space-y-3">
-        {order.map((kind) => {
-          const result = results[kind];
-          const selectedFile = selectedFiles[kind];
+      <div className="space-y-5">
+        {importGroups.map((group) => {
+          const visibleItems = group.items.filter((kind) => availableKinds.has(kind));
+          if (!visibleItems.length) return null;
 
           return (
-            <div key={kind} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <div className="flex flex-row-reverse items-start justify-between gap-4">
-                <div className="flex items-start gap-3">
-                  <FileSpreadsheet className="mt-1 h-5 w-5 text-blue-600" />
-                  <div className="text-right">
-                    <p className="font-black text-slate-900">{labels[kind]}</p>
-                    <p className="mt-1 text-xs text-slate-500">
-                      الأعمدة المطلوبة: {(config?.templates?.[kind] || []).join('، ')}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => handleDownload(kind)}
-                    className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"
-                  >
-                    <Download className="h-4 w-4" />
-                    تنزيل القالب
-                  </button>
-
-                  <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-700">
-                    <UploadCloud className="h-4 w-4" />
-                    اختيار ملف
-                    <input
-                      type="file"
-                      accept=".csv,.xlsx"
-                      className="hidden"
-                      onChange={(event) => handleChooseFile(kind, event.target.files?.[0] || null)}
-                    />
-                  </label>
-                </div>
+            <section key={group.title} className="rounded-3xl border border-slate-200 bg-slate-50/70 p-4">
+              <div className="mb-4 text-right">
+                <h4 className="text-lg font-black text-slate-900">{group.title}</h4>
+                <p className="mt-1 text-sm text-slate-500">{group.description}</p>
               </div>
-
-              {selectedFile && (
-                <div className="mt-4 rounded-xl border border-blue-100 bg-blue-50 p-4 text-right">
-                  <div className="flex flex-row-reverse items-start justify-between gap-3">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs font-bold text-slate-400">الملف المحدد</p>
-                      <p className="mt-1 truncate text-sm font-black text-slate-900">{selectedFile.name}</p>
-                      <p className="mt-1 text-xs text-slate-500">
-                        الحجم: {(selectedFile.size / 1024).toFixed(1)} KB
-                      </p>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => handleClearFile(kind)}
-                        disabled={loadingKey === kind}
-                        className="inline-flex items-center gap-2 rounded-lg border border-rose-100 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700 hover:bg-rose-100 disabled:opacity-60"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                        حذف الملف
-                      </button>
-
-                      <button
-                        onClick={() => handleUpload(kind)}
-                        disabled={loadingKey === kind}
-                        className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-700 disabled:opacity-60"
-                      >
-                        {loadingKey === kind ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <UploadCloud className="h-4 w-4" />
-                        )}
-                        رفع الآن
-                      </button>
-                    </div>
-                  </div>
-
-                  <p className="mt-3 text-xs font-medium text-blue-800">
-                    يمكنك حذف الملف واختيار نسخة معدلة قبل تنفيذ عملية الاستيراد.
-                  </p>
-                </div>
-              )}
-
-              {result && (
-                <div className="mt-4 rounded-xl border border-slate-100 bg-slate-50 p-4 text-right">
-                  <div className="mb-4 rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700">
-                    آخر ملف تم رفعه: {result.uploadedFileName || result.fileName || labels[kind]}
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                    <div>
-                      <p className="text-xs text-slate-400">الصفوف المضافة</p>
-                      <p className="mt-1 text-lg font-black text-emerald-600">{result.insertedRows}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-slate-400">الصفوف المتجاوزة</p>
-                      <p className="mt-1 text-lg font-black text-amber-600">{result.skippedRows}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-slate-400">أخطاء التحقق</p>
-                      <p className="mt-1 text-lg font-black text-rose-600">{result.errors?.length || 0}</p>
-                    </div>
-                  </div>
-
-                  {result.batchId && !result.rolledBackAt && (
-                    <div className="mt-4">
-                      <button
-                        onClick={() => handleRollbackBatch(result)}
-                        disabled={deletingBatchId === result.batchId}
-                        className="inline-flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-4 py-2 text-xs font-bold text-rose-700 hover:bg-rose-100 disabled:opacity-60"
-                      >
-                        {deletingBatchId === result.batchId ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <RotateCcw className="h-4 w-4" />
-                        )}
-                        حذف البيانات التي جاء بها هذا الملف
-                      </button>
-                    </div>
-                  )}
-
-                  {result.rollbackNote && (
-                    <div className="mt-4 rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-700">
-                      {result.rollbackNote}
-                    </div>
-                  )}
-
-                  {result.errors?.length > 0 && (
-                    <div className="mt-4 space-y-2">
-                      {result.errors.map((error: any) => (
-                        <div
-                          key={`${kind}-${error.rowNumber}-${error.message}`}
-                          className="rounded-lg border border-rose-100 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700"
-                        >
-                          الصف {error.rowNumber}: {error.message}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
+              <div className="space-y-3">
+                {visibleItems.map((kind) => renderImportCard(kind))}
+              </div>
+            </section>
           );
         })}
       </div>

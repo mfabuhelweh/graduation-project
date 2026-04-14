@@ -7,7 +7,7 @@ import {asyncHandler} from '../utils/asyncHandler.js';
 export const electionRoutes = Router();
 
 electionRoutes.get('/', optionalAuthMiddleware, asyncHandler(getElections));
-electionRoutes.get('/:id/ballot', optionalAuthMiddleware, asyncHandler(getElectionBallot));
+electionRoutes.get('/:id/ballot', authMiddleware, asyncHandler(getElectionBallot));
 electionRoutes.get('/:id', optionalAuthMiddleware, asyncHandler(getElectionById));
 electionRoutes.post('/', authMiddleware, adminMiddleware, asyncHandler(postElection));
 electionRoutes.patch('/:id', authMiddleware, adminMiddleware, asyncHandler(patchElection));

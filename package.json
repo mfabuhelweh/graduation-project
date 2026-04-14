@@ -14,9 +14,17 @@
     "db:seed": "tsx backend/scripts/run-sql.ts database/seed.sql",
     "db:seed-candidates": "tsx backend/scripts/seedCandidates.ts",
     "preview": "vite preview",
-    "start:backend": "tsx backend/src/server.ts"
+    "start:backend": "tsx backend/src/server.ts",
+    "mobile": "cd mobile && npx expo start",
+    "mobile:android": "cd mobile && npx expo start --android",
+    "mobile:ios": "cd mobile && npx expo start --ios",
+    "mobile:web": "cd mobile && npx expo start --web",
+    "mobile:install": "cd mobile && npm install",
+    "mobile:typecheck": "cd mobile && npx tsc --noEmit"
   },
   "dependencies": {
+    "@capacitor/android": "^7.4.2",
+    "@capacitor/core": "^7.4.2",
     "@google/genai": "^1.29.0",
     "@tailwindcss/vite": "^4.1.14",
     "@types/multer": "^2.1.0",
@@ -43,6 +51,7 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@capacitor/cli": "^7.4.2",
     "@types/cors": "^2.8.19",
     "@types/express": "^4.17.21",
     "@types/jsonwebtoken": "^9.0.10",

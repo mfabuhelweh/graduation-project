@@ -1,7 +1,8 @@
 import * as React from 'react';
-import { Loader2, Save, X } from 'lucide-react';
+import { Loader2, Save, Trash2, X } from 'lucide-react';
 import {
   createAdminElection,
+  deleteAdminElection,
   updateAdminElection,
   type ElectionFormPayload,
 } from '../../lib/api';
@@ -9,6 +10,7 @@ import {
 interface CreateElectionPageProps {
   setToast: (toast: any) => void;
   onCreated: (election: any) => Promise<void> | void;
+  onDeleted?: () => Promise<void> | void;
   onCancel: () => void;
   initialElection?: any | null;
 }
@@ -55,11 +57,13 @@ function mapElectionToForm(election: any | null | undefined): ElectionFormPayloa
 export const CreateElectionPage = ({
   setToast,
   onCreated,
+  onDeleted,
   onCancel,
   initialElection,
 }: CreateElectionPageProps) => {
   const [form, setForm] = React.useState<ElectionFormPayload>(() => mapElectionToForm(initialElection));
   const [isSaving, setIsSaving] = React.useState(false);
+  const [isDeleting, setIsDeleting] = React.useState(false);
 
   React.useEffect(() => {
     setForm(mapElectionToForm(initialElection));
@@ -97,6 +101,26 @@ export const CreateElectionPage = ({
       showToast(error instanceof Error ? error.message : 'تعذر حفظ بيانات الانتخاب.', 'error');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!isEditMode) return;
+
+    const confirmed = window.confirm(
+      `سيتم حذف الانتخاب "${initialElection.title}" وكل البيانات المرتبطة به من قاعدة البيانات.\n\nهل تريد المتابعة؟`,
+    );
+    if (!confirmed) return;
+
+    setIsDeleting(true);
+    try {
+      await deleteAdminElection(initialElection.id);
+      showToast('تم حذف الانتخاب بنجاح.', 'success');
+      await onDeleted?.();
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'تعذر حذف الانتخاب.', 'error');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -279,16 +303,27 @@ export const CreateElectionPage = ({
           <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
             <button
               onClick={submit}
-              disabled={isSaving}
+              disabled={isSaving || isDeleting}
               className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-60"
             >
               {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
               {isEditMode ? 'حفظ التعديلات' : 'إنشاء الانتخاب'}
             </button>
 
+            {isEditMode && (
+              <button
+                onClick={handleDelete}
+                disabled={isSaving || isDeleting}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700 hover:bg-rose-100 disabled:opacity-60"
+              >
+                {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                حذف الانتخاب
+              </button>
+            )}
+
             <button
               onClick={onCancel}
-              disabled={isSaving}
+              disabled={isSaving || isDeleting}
               className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
             >
               <X className="h-4 w-4" />
