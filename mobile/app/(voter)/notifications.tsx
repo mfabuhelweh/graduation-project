@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import {
   StyleSheet,
   TouchableOpacity,
@@ -7,8 +7,8 @@ import {
 } from "react-native";
 import { Text } from "react-native-paper";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { ScreenContainer } from "@/components/ScreenContainer";
-import { colors } from "@/constants/colors";
+import type { AppColors } from "@/constants/colors";
+import { useAppPreferences } from "@/hooks/useAppPreferences";
 
 // ─── إشعارات محلية (مثل ملف Notifications.tsx في الويب) ─────────────────────
 interface NotificationItem {
@@ -77,30 +77,69 @@ const INITIAL_NOTIFICATIONS: NotificationItem[] = [
   }
 ];
 
-const typeConfig = {
-  election: {
-    icon: "vote" as const,
-    color: "#6366f1",
-    bg: "rgba(99,102,241,0.12)"
+const NOTIFICATION_EN: Record<string, Pick<NotificationItem, "title" | "message" | "time">> = {
+  n1: {
+    title: "Voting is open",
+    message: "Voting for the 2024 parliamentary election is now open. You can vote from the Digital Voting page.",
+    time: "5 minutes ago"
   },
-  success: {
-    icon: "shield-check" as const,
-    color: colors.success,
-    bg: colors.successBg
+  n2: {
+    title: "Your identity was verified",
+    message: "Your voter record was verified successfully. You are eligible to participate in the election.",
+    time: "1 hour ago"
   },
-  info: {
-    icon: "information" as const,
-    color: colors.info,
-    bg: colors.infoBg
+  n3: {
+    title: "System update",
+    message: "The digital voting system was updated to the latest version. Clearing cache is recommended for the best experience.",
+    time: "3 hours ago"
   },
-  warning: {
-    icon: "alert" as const,
-    color: colors.warning,
-    bg: colors.warningBg
+  n4: {
+    title: "Reminder: voting deadline",
+    message: "Voting in the local district election ends within 24 hours. Do not miss your right to vote.",
+    time: "Yesterday"
+  },
+  n5: {
+    title: "Preliminary results",
+    message: "General list results will be announced once vote counting is complete and electronic ballot boxes close.",
+    time: "2 days ago"
+  },
+  n6: {
+    title: "Your vote was recorded",
+    message: "Your vote is recorded on the blockchain and cannot be changed. Transaction ID: 0x8a11...9ae7. Thank you for participating.",
+    time: "3 days ago"
   }
 };
 
+const notificationCopy = {
+  ar: {
+    title: "الإشعارات",
+    unread: (count: number) => `لديك ${count} إشعارات غير مقروءة`,
+    allRead: "جميع الإشعارات مقروءة",
+    markAll: "تحديد الكل كمقروء",
+    all: "الكل",
+    unreadFilter: "غير مقروء",
+    emptyTitle: "لا توجد إشعارات",
+    emptySub: "ستظهر هنا إشعارات الانتخابات والنظام",
+    footer: "يتم تحديث الإشعارات تلقائيًا عند وجود أي تغيير في حالة الانتخابات أو عمليات التصويت. تبقى الإشعارات لمدة 30 يومًا."
+  },
+  en: {
+    title: "Notifications",
+    unread: (count: number) => `You have ${count} unread notifications`,
+    allRead: "All notifications are read",
+    markAll: "Mark all as read",
+    all: "All",
+    unreadFilter: "Unread",
+    emptyTitle: "No notifications",
+    emptySub: "Election and system notifications will appear here",
+    footer: "Notifications update automatically when election status or voting activity changes. Notifications stay available for 30 days."
+  }
+} as const;
+
 export default function NotificationsScreen() {
+  const { colors, theme, language } = useAppPreferences();
+  const styles = useMemo(() => createStyles(colors, theme), [colors, theme]);
+  const typeConfig = useMemo(() => createTypeConfig(colors), [colors]);
+  const t = notificationCopy[language];
   const [notifications, setNotifications] = useState<NotificationItem[]>(
     INITIAL_NOTIFICATIONS
   );
@@ -139,7 +178,7 @@ export default function NotificationsScreen() {
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <View style={styles.bellBox}>
-            <MaterialCommunityIcons name="bell" size={24} color="#6366f1" />
+            <MaterialCommunityIcons name="bell" size={24} color={colors.primary} />
             {unreadCount > 0 && (
               <View style={styles.badge}>
                 <Text style={styles.badgeText}>{unreadCount}</Text>
@@ -147,11 +186,11 @@ export default function NotificationsScreen() {
             )}
           </View>
           <View style={styles.headerText}>
-            <Text style={styles.headerTitle}>الإشعارات</Text>
+            <Text style={styles.headerTitle}>{t.title}</Text>
             <Text style={styles.headerSub}>
               {unreadCount > 0
-                ? `لديك ${unreadCount} إشعارات غير مقروءة`
-                : "جميع الإشعارات مقروءة"}
+                ? t.unread(unreadCount)
+                : t.allRead}
             </Text>
           </View>
         </View>
@@ -161,9 +200,9 @@ export default function NotificationsScreen() {
             <MaterialCommunityIcons
               name="check-all"
               size={14}
-              color="#6366f1"
+              color={colors.primary}
             />
-            <Text style={styles.markAllText}>تحديد الكل كمقروء</Text>
+            <Text style={styles.markAllText}>{t.markAll}</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -180,7 +219,7 @@ export default function NotificationsScreen() {
               filter === "all" && styles.filterLabelActive
             ]}
           >
-            الكل ({notifications.length})
+            {t.all} ({notifications.length})
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -196,7 +235,7 @@ export default function NotificationsScreen() {
               filter === "unread" && styles.filterLabelActive
             ]}
           >
-            غير مقروء ({unreadCount})
+            {t.unreadFilter} ({unreadCount})
           </Text>
         </TouchableOpacity>
       </View>
@@ -216,9 +255,9 @@ export default function NotificationsScreen() {
                 color={colors.textMuted}
               />
             </View>
-            <Text style={styles.emptyTitle}>لا توجد إشعارات</Text>
+            <Text style={styles.emptyTitle}>{t.emptyTitle}</Text>
             <Text style={styles.emptySub}>
-              ستظهر هنا إشعارات الانتخابات والنظام
+              {t.emptySub}
             </Text>
           </View>
         ) : (
@@ -226,6 +265,7 @@ export default function NotificationsScreen() {
             const cfg =
               typeConfig[notif.type as keyof typeof typeConfig] ||
               typeConfig.info;
+            const localized = language === "ar" ? notif : NOTIFICATION_EN[notif.id] || notif;
             return (
               <TouchableOpacity
                 key={notif.id}
@@ -251,10 +291,10 @@ export default function NotificationsScreen() {
                   {/* النص */}
                   <View style={styles.cardBody}>
                     <View style={styles.cardTitleRow}>
-                      <Text style={styles.notifTime}>{notif.time}</Text>
-                      <Text style={styles.notifTitle}>{notif.title}</Text>
+                      <Text style={styles.notifTime}>{localized.time}</Text>
+                      <Text style={styles.notifTitle}>{localized.title}</Text>
                     </View>
-                    <Text style={styles.notifMessage}>{notif.message}</Text>
+                    <Text style={styles.notifMessage}>{localized.message}</Text>
                   </View>
 
                   {/* زر الحذف */}
@@ -276,18 +316,52 @@ export default function NotificationsScreen() {
         )}
 
         {/* ─── Footer ──────────────────────────────────────────────── */}
+        {language === "en" ? (
+          <View style={styles.footer}>
+            <Text style={styles.footerText}>{t.footer}</Text>
+          </View>
+        ) : (
         <View style={styles.footer}>
           <Text style={styles.footerText}>
             يتم تحديث الإشعارات تلقائياً عند وجود أي تغيير في حالة الانتخابات
             أو عمليات التصويت. تبقى الإشعارات لمدة 30 يوماً.
           </Text>
         </View>
+        )}
       </ScrollView>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+function createTypeConfig(colors: AppColors) {
+  return {
+    election: {
+      icon: "vote" as const,
+      color: colors.primary,
+      bg: colors.primaryGlow
+    },
+    success: {
+      icon: "shield-check" as const,
+      color: colors.success,
+      bg: colors.successBg
+    },
+    info: {
+      icon: "information" as const,
+      color: colors.info,
+      bg: colors.infoBg
+    },
+    warning: {
+      icon: "alert" as const,
+      color: colors.warning,
+      bg: colors.warningBg
+    }
+  };
+}
+
+function createStyles(colors: AppColors, theme: "light" | "dark") {
+  const isLight = theme === "light";
+
+  return StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: colors.background,
@@ -311,7 +385,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 16,
-    backgroundColor: "rgba(99,102,241,0.12)",
+    backgroundColor: colors.primaryGlow,
     justifyContent: "center",
     alignItems: "center"
   },
@@ -348,15 +422,15 @@ const styles = StyleSheet.create({
     flexDirection: "row-reverse",
     alignItems: "center",
     gap: 6,
-    backgroundColor: "rgba(99,102,241,0.12)",
+    backgroundColor: colors.primaryGlow,
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderWidth: 1,
-    borderColor: "rgba(99,102,241,0.2)"
+    borderColor: colors.border
   },
   markAllText: {
-    color: "#6366f1",
+    color: colors.primary,
     fontSize: 12,
     fontWeight: "700"
   },
@@ -397,7 +471,7 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingHorizontal: 16,
-    paddingBottom: 24,
+    paddingBottom: 120,
     gap: 10
   },
 
@@ -407,10 +481,15 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     padding: 16,
     borderWidth: 1,
-    borderColor: colors.border
+    borderColor: colors.border,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: isLight ? 0.06 : 0.14,
+    shadowRadius: 16,
+    elevation: 4
   },
   cardUnread: {
-    borderColor: "rgba(99,102,241,0.3)",
+    borderColor: colors.primary + "66",
     backgroundColor: colors.backgroundCard
   },
   unreadDot: {
@@ -420,7 +499,7 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: "#6366f1"
+    backgroundColor: colors.primary
   },
   cardRow: {
     flexDirection: "row-reverse",
@@ -518,4 +597,5 @@ const styles = StyleSheet.create({
     textAlign: "right",
     lineHeight: 18
   }
-});
+  });
+}

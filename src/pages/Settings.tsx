@@ -1,5 +1,16 @@
 import * as React from 'react';
-import { Bell, ChevronLeft, Globe2, Lock, LogOut, MoonStar, Sparkles, SunMedium, User } from 'lucide-react';
+import {
+  Bell,
+  ChevronLeft,
+  Globe2,
+  Lock,
+  LogOut,
+  MoonStar,
+  ShieldCheck,
+  Sparkles,
+  SunMedium,
+  User,
+} from 'lucide-react';
 import { cn } from '../lib/utils';
 
 interface SettingsProps {
@@ -11,6 +22,8 @@ interface SettingsProps {
   setUserProfile: React.Dispatch<React.SetStateAction<any>>;
   setToast: (toast: any) => void;
   onLogout?: () => void;
+  canViewSensitiveResults?: boolean;
+  canManageElectionData?: boolean;
 }
 
 type SettingsSubTab = 'menu' | 'profile' | 'preferences' | 'security' | 'notifications';
@@ -24,9 +37,12 @@ export const Settings = ({
   setUserProfile,
   setToast,
   onLogout,
+  canViewSensitiveResults = false,
+  canManageElectionData = false,
 }: SettingsProps) => {
   const [activeSettingsSubTab, setActiveSettingsSubTab] = React.useState<SettingsSubTab>('menu');
   const [isEditingProfile, setIsEditingProfile] = React.useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = React.useState(false);
   const [notificationPrefs, setNotificationPrefs] = React.useState({
     electionAlerts: true,
     votingReminders: true,
@@ -39,6 +55,24 @@ export const Settings = ({
     email: userProfile?.email || '',
     nationalId: userProfile?.nationalId || '',
   });
+
+  const isAdmin = userProfile?.role === 'admin';
+  const adminRoleLabel =
+    userProfile?.adminRole === 'super_admin'
+      ? language === 'ar'
+        ? 'مشرف رفيع'
+        : 'Super admin'
+      : userProfile?.adminRole === 'auditor'
+        ? language === 'ar'
+          ? 'مدقق'
+          : 'Auditor'
+        : userProfile?.adminRole === 'election_admin'
+          ? language === 'ar'
+            ? 'مدير انتخابات'
+            : 'Election admin'
+          : language === 'ar'
+            ? 'مستخدم'
+            : 'User';
 
   const copy = {
     ar: {
@@ -60,6 +94,9 @@ export const Settings = ({
       cancel: 'إلغاء',
       verifiedId: 'هذا الرقم موثق ومرتبط بهويتك الرقمية.',
       logout: 'تسجيل الخروج',
+      logoutDanger: 'إنهاء الجلسة الحالية',
+      logoutConfirmTitle: 'تأكيد تسجيل الخروج',
+      logoutConfirmBody: 'هل أنت متأكد من تسجيل الخروج؟ سيتم إنهاء الجلسة الحالية.',
       notificationsDesc: 'تحكم بالتنبيهات التي تريد استلامها على التطبيق',
       electionAlerts: 'تنبيهات الانتخابات',
       electionAlertsHint: 'إشعارات فتح وإغلاق باب التصويت وتحديثات الحالة',
@@ -77,12 +114,12 @@ export const Settings = ({
       arabic: 'العربية',
       english: 'English',
       appearanceSection: 'وضع العرض',
-      appearanceHint: 'اختر بين الوضع الفاتح والدارك مود.',
+      appearanceHint: 'اختر بين الوضع الفاتح والوضع الداكن.',
       lightMode: 'وضع فاتح',
-      darkMode: 'دارك مود',
+      darkMode: 'وضع داكن',
       preferencesSaved: 'تم حفظ تفضيلاتك',
       autoSaved: 'يتم حفظ التغييرات تلقائيًا',
-      appearanceTitle: 'خلّي التجربة على ذوقك',
+      appearanceTitle: 'خلّ التجربة على ذوقك',
       appearanceCopy: 'اختر لغتك المفضلة والثيم المناسب لراحتك أثناء الاستخدام.',
       accountVerification: 'توثيق الحساب',
       accountVerificationHint: 'الحساب مربوط بالبريد الإلكتروني والرقم الوطني.',
@@ -92,6 +129,12 @@ export const Settings = ({
       privacyHint: 'لا يتم تخزين هوية الناخب داخل جدول الأصوات.',
       lightDescription: 'نظيف ومشرق',
       darkDescription: 'أنيق ومريح للعين',
+      roleAccess: 'صلاحيات الوصول',
+      roleAccessHint: 'هذه الصلاحيات تُطبَّق عبر الـ middleware في الخادم وتحدد ما الذي يمكن لهذا الأدمن رؤيته أو تعديله.',
+      canManageElectionData: 'إدارة الانتخابات والاستيراد',
+      canViewSensitiveResults: 'الوصول إلى النتائج الحساسة والسجلات',
+      enabled: 'مسموح',
+      disabled: 'غير مسموح',
     },
     en: {
       settings: 'Settings',
@@ -112,6 +155,9 @@ export const Settings = ({
       cancel: 'Cancel',
       verifiedId: 'This number is verified and linked to your identity.',
       logout: 'Logout',
+      logoutDanger: 'End current session',
+      logoutConfirmTitle: 'Confirm logout',
+      logoutConfirmBody: 'Are you sure you want to log out? The current session will end.',
       notificationsDesc: 'Control which alerts you receive in the app',
       electionAlerts: 'Election alerts',
       electionAlertsHint: 'Voting open/close and status updates',
@@ -129,7 +175,7 @@ export const Settings = ({
       arabic: 'Arabic',
       english: 'English',
       appearanceSection: 'Appearance mode',
-      appearanceHint: 'Choose between light mode and an elegant dark mode.',
+      appearanceHint: 'Choose between light mode and dark mode.',
       lightMode: 'Light Mode',
       darkMode: 'Dark Mode',
       preferencesSaved: 'Your preferences were saved',
@@ -144,6 +190,12 @@ export const Settings = ({
       privacyHint: 'Voter identity is not stored in the votes table.',
       lightDescription: 'Clean and bright',
       darkDescription: 'Elegant and easy on the eyes',
+      roleAccess: 'Role access',
+      roleAccessHint: 'These permissions are enforced by backend middleware and define what this admin can see or modify.',
+      canManageElectionData: 'Manage elections and imports',
+      canViewSensitiveResults: 'Access sensitive results and logs',
+      enabled: 'Allowed',
+      disabled: 'Not allowed',
     },
   }[language];
 
@@ -247,62 +299,54 @@ export const Settings = ({
       </div>
 
       {activeSettingsSubTab === 'menu' && (
-        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm md:rounded-3xl">
-          {menuItems.map((item, index) => {
-            const Icon = item.icon;
-            return (
-              <button
-                key={item.key}
-                type="button"
-                onClick={() => {
-                  if (item.key === 'profile') {
-                    setEditProfileData({
-                      displayName: userProfile?.displayName || '',
-                      email: userProfile?.email || '',
-                      nationalId: userProfile?.nationalId || '',
-                    });
-                    setIsEditingProfile(false);
-                  }
-                  setActiveSettingsSubTab(item.key);
-                }}
-                className={cn(
-                  'touch-manipulation flex min-h-[4.25rem] w-full items-center justify-between px-4 py-4 transition-all hover:bg-slate-50 active:bg-slate-100 md:min-h-0 md:p-6',
-                  index !== menuItems.length - 1 && 'border-b border-slate-100',
-                  language === 'ar' ? 'flex-row' : 'flex-row-reverse',
-                )}
-              >
-                <div className={cn('flex min-w-0 items-center gap-3 md:gap-4', language === 'ar' ? 'flex-row' : 'flex-row-reverse')}>
-                  <div className={cn('flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl md:h-12 md:w-12', item.iconWrap)}>
-                    <Icon className="h-6 w-6" />
+        <div className="space-y-4">
+          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm md:rounded-3xl">
+            {menuItems.map((item, index) => {
+              const Icon = item.icon;
+              return (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => {
+                    if (item.key === 'profile') {
+                      setEditProfileData({
+                        displayName: userProfile?.displayName || '',
+                        email: userProfile?.email || '',
+                        nationalId: userProfile?.nationalId || '',
+                      });
+                      setIsEditingProfile(false);
+                    }
+                    setActiveSettingsSubTab(item.key);
+                  }}
+                  className={cn(
+                    'touch-manipulation flex min-h-[4.25rem] w-full items-center justify-between px-4 py-4 transition-all hover:bg-slate-50 active:bg-slate-100 md:min-h-0 md:p-6',
+                    index !== menuItems.length - 1 && 'border-b border-slate-100',
+                    language === 'ar' ? 'flex-row' : 'flex-row-reverse',
+                  )}
+                >
+                  <div className={cn('flex min-w-0 items-center gap-3 md:gap-4', language === 'ar' ? 'flex-row' : 'flex-row-reverse')}>
+                    <div className={cn('flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl md:h-12 md:w-12', item.iconWrap)}>
+                      <Icon className="h-6 w-6" />
+                    </div>
+                    <div className={cn('min-w-0', language === 'ar' ? 'text-right' : 'text-left')}>
+                      <p className="font-bold text-slate-900">{item.title}</p>
+                      <p className="text-xs text-slate-500">{item.description}</p>
+                    </div>
                   </div>
-                  <div className={cn('min-w-0', language === 'ar' ? 'text-right' : 'text-left')}>
-                    <p className="font-bold text-slate-900">{item.title}</p>
-                    <p className="text-xs text-slate-500">{item.description}</p>
-                  </div>
-                </div>
-                <ChevronLeft className={cn('h-5 w-5 shrink-0 text-slate-300', language === 'en' && 'rotate-180')} />
-              </button>
-            );
-          })}
+                  <ChevronLeft className={cn('h-5 w-5 shrink-0 text-slate-300', language === 'en' && 'rotate-180')} />
+                </button>
+              );
+            })}
+          </div>
 
           {onLogout && (
             <button
               type="button"
-              onClick={onLogout}
-              className={cn(
-                'touch-manipulation flex min-h-[4.25rem] w-full items-center justify-between border-t border-rose-100 px-4 py-4 text-rose-700 transition-all hover:bg-rose-50 active:bg-rose-100 md:min-h-0 md:p-6',
-                language === 'ar' ? 'flex-row' : 'flex-row-reverse',
-              )}
+              onClick={() => setShowLogoutConfirm(true)}
+              className="touch-manipulation inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-rose-600 px-5 py-4 font-bold text-white shadow-sm transition-all hover:bg-rose-700 active:opacity-90"
             >
-              <div className={cn('flex min-w-0 items-center gap-3 md:gap-4', language === 'ar' ? 'flex-row' : 'flex-row-reverse')}>
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-rose-50 text-rose-600 md:h-12 md:w-12">
-                  <LogOut className="h-6 w-6" />
-                </div>
-                <div className={cn('min-w-0', language === 'ar' ? 'text-right' : 'text-left')}>
-                  <p className="font-bold">{copy.logout}</p>
-                </div>
-              </div>
-              <ChevronLeft className={cn('h-5 w-5 shrink-0 text-rose-300', language === 'en' && 'rotate-180')} />
+              <LogOut className="h-5 w-5" />
+              {copy.logoutDanger}
             </button>
           )}
         </div>
@@ -354,12 +398,7 @@ export const Settings = ({
                           {option.description}
                         </p>
                       </div>
-                      <div
-                        className={cn(
-                          'flex h-10 w-10 items-center justify-center rounded-2xl transition-all',
-                          isActive ? 'bg-blue-600 text-white' : 'bg-white text-slate-500',
-                        )}
-                      >
+                      <div className={cn('flex h-10 w-10 items-center justify-center rounded-2xl transition-all', isActive ? 'bg-blue-600 text-white' : 'bg-white text-slate-500')}>
                         <Globe2 className="h-5 w-5" />
                       </div>
                     </div>
@@ -376,18 +415,8 @@ export const Settings = ({
             </div>
             <div className="grid gap-3 md:grid-cols-2">
               {[
-                {
-                  value: 'light' as const,
-                  label: copy.lightMode,
-                  description: copy.lightDescription,
-                  icon: SunMedium,
-                },
-                {
-                  value: 'dark' as const,
-                  label: copy.darkMode,
-                  description: copy.darkDescription,
-                  icon: MoonStar,
-                },
+                { value: 'light' as const, label: copy.lightMode, description: copy.lightDescription, icon: SunMedium },
+                { value: 'dark' as const, label: copy.darkMode, description: copy.darkDescription, icon: MoonStar },
               ].map((option) => {
                 const Icon = option.icon;
                 const isActive = theme === option.value;
@@ -411,25 +440,11 @@ export const Settings = ({
                         <p className={cn('font-bold', isActive ? (option.value === 'dark' ? 'text-white' : 'text-amber-900') : 'text-slate-900')}>
                           {option.label}
                         </p>
-                        <p
-                          className={cn(
-                            'mt-1 text-xs font-semibold',
-                            isActive ? (option.value === 'dark' ? 'text-slate-300' : 'text-amber-700') : 'text-slate-500',
-                          )}
-                        >
+                        <p className={cn('mt-1 text-xs font-semibold', isActive ? (option.value === 'dark' ? 'text-slate-300' : 'text-amber-700') : 'text-slate-500')}>
                           {option.description}
                         </p>
                       </div>
-                      <div
-                        className={cn(
-                          'flex h-10 w-10 items-center justify-center rounded-2xl transition-all',
-                          isActive
-                            ? option.value === 'dark'
-                              ? 'bg-white/10 text-white'
-                              : 'bg-amber-500 text-white'
-                            : 'bg-white text-slate-500',
-                        )}
-                      >
+                      <div className={cn('flex h-10 w-10 items-center justify-center rounded-2xl transition-all', isActive ? (option.value === 'dark' ? 'bg-white/10 text-white' : 'bg-amber-500 text-white') : 'bg-white text-slate-500')}>
                         <Icon className="h-5 w-5" />
                       </div>
                     </div>
@@ -448,9 +463,7 @@ export const Settings = ({
               {(userProfile?.displayName || 'U').charAt(0)}
             </div>
             <div className="max-w-full px-2 text-center">
-              <h3 className="break-words text-lg font-bold text-slate-900 md:text-xl">
-                {userProfile?.displayName || 'User'}
-              </h3>
+              <h3 className="break-words text-lg font-bold text-slate-900 md:text-xl">{userProfile?.displayName || 'User'}</h3>
               <p className="mt-1 break-all text-sm text-slate-500">{userProfile?.email || 'user@example.com'}</p>
             </div>
           </div>
@@ -467,9 +480,7 @@ export const Settings = ({
                 readOnly={!isEditingProfile}
                 className={cn(
                   'min-h-12 w-full rounded-xl border px-4 py-3 text-base transition-all focus:outline-none md:text-sm',
-                  isEditingProfile
-                    ? 'border-blue-200 bg-white ring-4 ring-blue-50 focus:border-blue-500'
-                    : 'border-slate-200 bg-slate-50 text-slate-600',
+                  isEditingProfile ? 'border-blue-200 bg-white ring-4 ring-blue-50 focus:border-blue-500' : 'border-slate-200 bg-slate-50 text-slate-600',
                 )}
               />
               {!isEditingProfile && <p className="text-[10px] text-slate-400">{copy.verifiedId}</p>}
@@ -486,9 +497,7 @@ export const Settings = ({
                 readOnly={!isEditingProfile}
                 className={cn(
                   'min-h-12 w-full rounded-xl border px-4 py-3 text-base transition-all focus:outline-none md:text-sm',
-                  isEditingProfile
-                    ? 'border-blue-200 bg-white ring-4 ring-blue-50 focus:border-blue-500'
-                    : 'border-slate-200 bg-slate-50 text-slate-600',
+                  isEditingProfile ? 'border-blue-200 bg-white ring-4 ring-blue-50 focus:border-blue-500' : 'border-slate-200 bg-slate-50 text-slate-600',
                 )}
               />
             </div>
@@ -504,9 +513,7 @@ export const Settings = ({
                 readOnly={!isEditingProfile}
                 className={cn(
                   'min-h-12 w-full rounded-xl border px-4 py-3 text-base transition-all focus:outline-none md:text-sm',
-                  isEditingProfile
-                    ? 'border-blue-200 bg-white ring-4 ring-blue-50 focus:border-blue-500'
-                    : 'border-slate-200 bg-slate-50 text-slate-600',
+                  isEditingProfile ? 'border-blue-200 bg-white ring-4 ring-blue-50 focus:border-blue-500' : 'border-slate-200 bg-slate-50 text-slate-600',
                 )}
               />
             </div>
@@ -561,6 +568,39 @@ export const Settings = ({
               <p className="font-bold text-slate-800">{copy.privacy}</p>
               <p className="mt-1 text-sm leading-relaxed text-slate-500">{copy.privacyHint}</p>
             </div>
+
+            {isAdmin && (
+              <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4">
+                <div className="flex items-center justify-end gap-3">
+                  <div className="text-right">
+                    <p className="font-bold text-slate-900">{copy.roleAccess}</p>
+                    <p className="mt-1 text-sm leading-relaxed text-slate-600">{copy.roleAccessHint}</p>
+                  </div>
+                  <div className="rounded-2xl bg-white p-2 text-blue-600">
+                    <ShieldCheck className="h-5 w-5" />
+                  </div>
+                </div>
+
+                <div className="mt-4 rounded-2xl bg-white p-4 text-right">
+                  <p className="text-xs font-bold text-slate-400">{language === 'ar' ? 'الدور الحالي' : 'Current role'}</p>
+                  <p className="mt-2 text-lg font-black text-slate-900">{adminRoleLabel}</p>
+                </div>
+
+                <div className="mt-3 grid gap-3 md:grid-cols-2">
+                  {[
+                    { label: copy.canManageElectionData, enabled: canManageElectionData },
+                    { label: copy.canViewSensitiveResults, enabled: canViewSensitiveResults },
+                  ].map((item) => (
+                    <div key={item.label} className="rounded-2xl bg-white p-4 text-right">
+                      <p className="text-sm font-bold text-slate-900">{item.label}</p>
+                      <p className={cn('mt-2 text-sm font-black', item.enabled ? 'text-emerald-600' : 'text-rose-600')}>
+                        {item.enabled ? copy.enabled : copy.disabled}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -576,10 +616,7 @@ export const Settings = ({
           ].map((item) => {
             const checked = notificationPrefs[item.key as keyof typeof notificationPrefs];
             return (
-              <label
-                key={item.key}
-                className="flex cursor-pointer items-start justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50 p-4"
-              >
+              <label key={item.key} className="flex cursor-pointer items-start justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50 p-4">
                 <input
                   type="checkbox"
                   checked={checked}
@@ -606,6 +643,37 @@ export const Settings = ({
           >
             {copy.saveNotifications}
           </button>
+        </div>
+      )}
+
+      {showLogoutConfirm && onLogout && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl">
+            <div className="text-right">
+              <h3 className="text-xl font-black text-slate-900">{copy.logoutConfirmTitle}</h3>
+              <p className="mt-2 text-sm leading-7 text-slate-500">{copy.logoutConfirmBody}</p>
+            </div>
+
+            <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setShowLogoutConfirm(false)}
+                className="min-h-11 rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50"
+              >
+                {copy.cancel}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowLogoutConfirm(false);
+                  onLogout();
+                }}
+                className="min-h-11 rounded-xl bg-rose-600 px-4 py-2 text-sm font-bold text-white hover:bg-rose-700"
+              >
+                {copy.logout}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

@@ -36,6 +36,8 @@ export async function getDashboardSummary() {
         quotas: [],
       },
       topCandidates: [],
+      districtTurnout: [],
+      lastUpdatedAt: new Date().toISOString(),
     };
   }
 
@@ -52,6 +54,8 @@ export async function getDashboardSummary() {
       hourlyVotes: [],
       seatsDistribution: { totalSeats: 0, localSeats: 0, partySeats: 0, quotas: [] },
       topCandidates: [],
+      districtTurnout: [],
+      lastUpdatedAt: new Date().toISOString(),
     };
   }
 
@@ -59,11 +63,12 @@ export async function getDashboardSummary() {
     `SELECT e.id,
             e.title,
             e.status,
-            e.start_at,
-            e.end_at,
-            e.total_national_party_seats,
-            (SELECT COUNT(*) FROM voters v WHERE v.election_id = e.id) AS voters_count,
-            (SELECT COUNT(*) FROM districts d WHERE d.election_id = e.id) AS districts_count
+            e.start_at AS "startAt",
+            e.end_at AS "endAt",
+            e.total_national_party_seats AS "totalNationalPartySeats",
+            e.show_turnout_publicly AS "showTurnoutPublicly",
+            (SELECT COUNT(*) FROM voters v WHERE v.election_id = e.id) AS "votersCount",
+            (SELECT COUNT(*) FROM districts d WHERE d.election_id = e.id) AS "districtsCount"
      FROM elections e
      WHERE e.title = $1
      ORDER BY
@@ -185,6 +190,33 @@ export async function getDashboardSummary() {
 
   const localSeats = Number(seatsResult.rows[0]?.local_seats || 0);
   const partySeats = Number(seatsResult.rows[0]?.party_seats || 0);
+  const districtTurnoutResult = await query(
+    `SELECT d.id,
+            d.name,
+            d.code,
+            COALESCE(voters.registered_voters, 0)::int AS "registeredVoters",
+            COALESCE(votes.cast_votes, 0)::int AS votes,
+            CASE
+              WHEN COALESCE(voters.registered_voters, 0) = 0 THEN 0
+              ELSE ROUND((COALESCE(votes.cast_votes, 0)::numeric / voters.registered_voters::numeric) * 100, 1)
+            END AS turnout
+     FROM districts d
+     LEFT JOIN (
+       SELECT district_id, COUNT(*)::int AS registered_voters
+       FROM voters
+       WHERE ($1::uuid IS NULL OR election_id = $1::uuid)
+       GROUP BY district_id
+     ) voters ON voters.district_id = d.id
+     LEFT JOIN (
+       SELECT district_id, COUNT(*)::int AS cast_votes
+       FROM district_list_votes
+       WHERE ($1::uuid IS NULL OR election_id = $1::uuid)
+       GROUP BY district_id
+     ) votes ON votes.district_id = d.id
+     WHERE ($1::uuid IS NULL OR d.election_id = $1::uuid)
+     ORDER BY turnout DESC, d.name`,
+    [electionId],
+  );
 
   return {
     activeElection,
@@ -203,5 +235,12 @@ export async function getDashboardSummary() {
       quotas: quotaResult.rows,
     },
     topCandidates: topCandidatesResult.rows,
+    districtTurnout: districtTurnoutResult.rows.map((row: any) => ({
+      ...row,
+      registeredVoters: Number(row.registeredVoters || 0),
+      votes: Number(row.votes || 0),
+      turnout: Number(row.turnout || 0),
+    })),
+    lastUpdatedAt: new Date().toISOString(),
   };
 }

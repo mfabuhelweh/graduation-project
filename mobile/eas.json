@@ -1,6 +1,7 @@
 {
   "cli": {
-    "version": ">= 10.0.0"
+    "version": ">= 10.0.0",
+    "appVersionSource": "local"
   },
   "build": {
     "development": {
@@ -22,12 +23,26 @@
     },
     "production": {
       "distribution": "store",
+      "ios": {
+        "simulator": false,
+        "autoIncrement": true
+      },
       "android": {
         "buildType": "app-bundle"
+      }
+    },
+    "testflight": {
+      "distribution": "store",
+      "ios": {
+        "simulator": false,
+        "autoIncrement": true
       }
     }
   },
   "submit": {
-    "production": {}
+    "production": {},
+    "testflight": {
+      "ios": {}
+    }
   }
 }

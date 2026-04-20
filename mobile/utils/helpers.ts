@@ -1,9 +1,11 @@
 import type { Election } from "@/types";
 
-export function formatDate(date?: string | null) {
+export type AppLanguage = "ar" | "en";
+
+export function formatDate(date?: string | null, language: AppLanguage = "ar") {
   if (!date) return "-";
 
-  return new Intl.DateTimeFormat("ar-JO", {
+  return new Intl.DateTimeFormat(language === "ar" ? "ar-JO" : "en-US", {
     year: "numeric",
     month: "long",
     day: "numeric",
@@ -28,14 +30,17 @@ export function resolveElectionPhase(election?: Pick<Election, "status" | "start
   return status || "unknown";
 }
 
-export function getElectionStatusLabel(election?: Pick<Election, "status" | "startAt" | "endAt"> | null) {
+export function getElectionStatusLabel(
+  election?: Pick<Election, "status" | "startAt" | "endAt"> | null,
+  language: AppLanguage = "ar"
+) {
   const phase = resolveElectionPhase(election);
 
-  if (phase === "active") return "نشطة الآن";
-  if (phase === "upcoming") return "قادمة";
-  if (phase === "ended") return "منتهية";
+  if (phase === "active") return language === "ar" ? "نشطة الآن" : "Active now";
+  if (phase === "upcoming") return language === "ar" ? "قادمة" : "Upcoming";
+  if (phase === "ended") return language === "ar" ? "منتهية" : "Ended";
 
-  return "غير محددة";
+  return language === "ar" ? "غير محددة" : "Unknown";
 }
 
 export function canViewResults(

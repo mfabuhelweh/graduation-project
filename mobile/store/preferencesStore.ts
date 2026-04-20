@@ -15,7 +15,7 @@ interface PreferencesState {
 
 export const usePreferencesStore = create<PreferencesState>((set, get) => ({
   language: "ar",
-  theme: "dark",
+  theme: "light",
   isHydrated: false,
   hydratePreferences: async () => {
     const preferences = await loadAppPreferences();

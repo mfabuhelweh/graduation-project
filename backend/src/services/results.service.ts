@@ -2,6 +2,7 @@ import { adminDb } from '../config/firebaseAdmin.js';
 import { env } from '../config/env.js';
 import { memoryStore } from '../data/memoryStore.js';
 import { query, usePostgres } from '../db/pool.js';
+import { canViewSensitiveResults } from '../middleware/adminMiddleware.js';
 import type { AuthenticatedUser } from '../middleware/authMiddleware.js';
 import { canExposeResults } from '../utils/electionState.js';
 
@@ -42,6 +43,9 @@ function assertResultsVisibility(
   }
 
   if (user?.role === 'admin') {
+    if (!canViewSensitiveResults(user)) {
+      throw new Error('Your admin role is not allowed to access sensitive results');
+    }
     return election;
   }
 

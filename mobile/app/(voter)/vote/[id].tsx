@@ -6,20 +6,23 @@ import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { ScreenContainer } from "@/components/ScreenContainer";
 import { VotingFlow } from "@/components/VotingFlow";
 import { useAuth } from "@/hooks/useAuth";
+import { useAppPreferences } from "@/hooks/useAppPreferences";
 import { useElectionDetails } from "@/hooks/useElectionDetails";
 
 export default function VoteScreen() {
   const params = useLocalSearchParams<{ id: string }>();
   const electionId = Array.isArray(params.id) ? params.id[0] : params.id;
   const { user } = useAuth();
+  const { language } = useAppPreferences();
+  const isArabic = language === "ar";
   const { data, isLoading, error, refetch } = useElectionDetails(electionId || "");
 
   if (!electionId) {
     return (
       <ScreenContainer scroll={false}>
         <EmptyState
-          title="تعذر تحميل صفحة التصويت"
-          description="معرف الانتخاب غير موجود في الرابط الحالي."
+          title={isArabic ? "تعذر تحميل صفحة التصويت" : "Could not load voting page"}
+          description={isArabic ? "معرف الانتخاب غير موجود في الرابط الحالي." : "The election ID is missing from the current link."}
         />
       </ScreenContainer>
     );
@@ -28,7 +31,7 @@ export default function VoteScreen() {
   if (isLoading) {
     return (
       <ScreenContainer scroll={false}>
-        <LoadingSpinner label="جارٍ تجهيز بطاقة التصويت..." />
+        <LoadingSpinner label={isArabic ? "جارٍ تجهيز بطاقة التصويت..." : "Preparing your ballot..."} />
       </ScreenContainer>
     );
   }
@@ -37,7 +40,7 @@ export default function VoteScreen() {
     return (
       <ScreenContainer scroll={false}>
         <ErrorMessage
-          message={error?.message || "تعذر تحميل بيانات الانتخاب."}
+          message={error?.message || (isArabic ? "تعذر تحميل بيانات الانتخاب." : "Could not load election data.")}
           onRetry={() => refetch()}
         />
       </ScreenContainer>
@@ -47,7 +50,7 @@ export default function VoteScreen() {
   return (
     <ScreenContainer>
       <AppHeader
-        title="التصويت الإلكتروني"
+        title={isArabic ? "التصويت الإلكتروني" : "Digital Voting"}
         subtitle={data.election.title}
       />
 

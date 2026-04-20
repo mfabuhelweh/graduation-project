@@ -1,5 +1,5 @@
 import { API_ENDPOINTS } from "@/constants/endpoints";
-import { apiClient, extractData } from "@/services/api";
+import { apiClient, extractData, getDemoModeHeaders } from "@/services/api";
 import type { AuthSession, AuthUser, ApiEnvelope } from "@/types";
 
 interface LoginResponse {
@@ -74,11 +74,15 @@ export async function fetchCurrentUser() {
   };
 }
 
-export async function startSanadLogin(nationalId: string) {
+export async function startSanadLogin(nationalId: string, password: string) {
   const response = await apiClient.post<ApiEnvelope<SanadStartResponse>>(
     API_ENDPOINTS.auth.sanadStart,
     {
-      nationalId: nationalId.trim()
+      nationalId: nationalId.trim(),
+      password: password.trim()
+    },
+    {
+      headers: getDemoModeHeaders("sanad-otp")
     }
   );
 

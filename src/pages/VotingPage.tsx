@@ -30,6 +30,67 @@ interface VotingPageProps {
 
 type Step = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
+function getEntitySeed(entity: any, type: 'party' | 'list' | 'candidate') {
+  return encodeURIComponent(
+    `${type}-${entity?.id || entity?.nationalId || entity?.candidateNumber || entity?.code || entity?.name || entity?.fullName || 'entity'}`,
+  );
+}
+
+function getGeneratedEntityImage(entity: any, type: 'party' | 'list' | 'candidate') {
+  const seed = getEntitySeed(entity, type);
+
+  if (type === 'candidate') {
+    return `https://i.pravatar.cc/160?u=${seed}`;
+  }
+
+  return `https://api.dicebear.com/9.x/shapes/png?seed=${seed}&backgroundColor=ffffff,dbeafe,e0f2fe&radius=8`;
+}
+
+function getEntityImage(entity: any, type: 'party' | 'list' | 'candidate') {
+  return entity?.photoUrl || entity?.logoUrl || entity?.imageUrl || entity?.avatarUrl || getGeneratedEntityImage(entity, type);
+}
+
+function buildConfirmationCode(electionId: string, votingToken: string) {
+  const source = `${electionId}-${votingToken}-${Date.now()}`;
+  let hash = 0;
+  for (let index = 0; index < source.length; index += 1) {
+    hash = (hash * 31 + source.charCodeAt(index)) >>> 0;
+  }
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const chars = Array.from({ length: 8 }, (_, index) => alphabet[(hash >> (index * 4)) & 31]);
+  return `${chars.slice(0, 2).join('')}-${chars.slice(2, 4).join('')}-${chars.slice(4, 6).join('')}-${chars.slice(6, 8).join('')}`;
+}
+
+function EntityAvatar({
+  entity,
+  type,
+  compact = false,
+}: {
+  entity: any;
+  type: 'party' | 'list' | 'candidate';
+  compact?: boolean;
+}) {
+  const imageUrl = getEntityImage(entity, type);
+  const label = entity?.name || entity?.fullName || '';
+  const initials = String(label)
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join('');
+
+  return (
+    <div
+      className={cn(
+        'flex shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 text-blue-600',
+        compact ? 'h-10 w-10' : 'h-14 w-14',
+      )}
+    >
+      <img src={imageUrl} alt="" className="h-full w-full object-cover" />
+    </div>
+  );
+}
+
 export const VotingPage = ({
   electionId,
   initialNationalId,
@@ -51,6 +112,7 @@ export const VotingPage = ({
   const [selectedParty, setSelectedParty] = React.useState<string | null>(null);
   const [selectedDistrictList, setSelectedDistrictList] = React.useState<string | null>(null);
   const [selectedDistrictCandidates, setSelectedDistrictCandidates] = React.useState<string[]>([]);
+  const [confirmationCode, setConfirmationCode] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     if (initialNationalId) {
@@ -65,7 +127,7 @@ export const VotingPage = ({
   const selectedList = districtLists.find((item: any) => item.id === selectedDistrictList);
 
   const progressSteps = [
-    t('بيانات سند', 'SANAD Data'),
+    t('بيانات الناخب', 'Voter Data'),
     t('التحقق من الهوية', 'Identity Check'),
     t('الحزب الوطني', 'National Party'),
     t('القائمة المحلية', 'Local List'),
@@ -166,6 +228,7 @@ export const VotingPage = ({
         districtCandidateIds: selectedDistrictCandidates,
         votingToken,
       });
+      setConfirmationCode(buildConfirmationCode(electionId || 'vote', votingToken));
       setStep(6);
     } catch (error) {
       setVerificationMessage(
@@ -363,6 +426,7 @@ export const VotingPage = ({
                     )}
                   >
                     <div className="flex items-start justify-between gap-3">
+                      <EntityAvatar entity={party} type="party" />
                       <div className="min-w-0 text-right">
                         <h3 className="text-base font-black text-slate-900 md:text-lg">{party.name}</h3>
                         <p className="mt-1 text-xs leading-relaxed text-slate-500 md:text-xs">
@@ -416,6 +480,9 @@ export const VotingPage = ({
                       : 'border-slate-200 bg-white hover:border-emerald-200',
                   )}
                 >
+                  <div className="mb-3 flex justify-end">
+                    <EntityAvatar entity={list} type="list" />
+                  </div>
                   <h3 className="text-base font-black text-slate-900">{list.name}</h3>
                   <p className="mt-2 text-xs text-slate-500">{list.description || t('قائمة محلية ضمن دائرة الناخب', 'Local list within voter district')}</p>
                   <p className="mt-3 text-xs font-bold text-slate-400">
@@ -473,6 +540,7 @@ export const VotingPage = ({
                         : 'border-slate-200 bg-white hover:border-emerald-200',
                     )}
                   >
+                    <EntityAvatar entity={candidate} type="candidate" />
                     <div className="min-w-0 text-right">
                       <p className="text-base font-black text-slate-900">{candidate.fullName}</p>
                       <p className="mt-1 text-xs text-slate-500">
@@ -549,9 +617,10 @@ export const VotingPage = ({
                   .map((candidate: any) => (
                     <div
                       key={candidate.id}
-                      className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3.5 text-sm font-bold leading-snug text-slate-700 md:py-3"
+                      className="flex items-center justify-end gap-3 rounded-xl border border-slate-100 bg-slate-50 px-4 py-3.5 text-sm font-bold leading-snug text-slate-700 md:py-3"
                     >
-                      {candidate.fullName}
+                      <span>{candidate.fullName}</span>
+                      <EntityAvatar entity={candidate} type="candidate" compact />
                     </div>
                   ))}
               </div>
@@ -581,6 +650,15 @@ export const VotingPage = ({
                 `Thank you ${displayName}. Your vote is stored anonymously and linked only to the voting transaction.`,
               )}
             </p>
+            <div className="mx-auto max-w-sm rounded-2xl border border-emerald-200 bg-emerald-50 p-5">
+              <p className="text-xs font-bold text-slate-500">{t('رمز تأكيد التصويت', 'Vote confirmation code')}</p>
+              <p className="mt-2 font-mono text-2xl font-black tracking-[0.2em] text-emerald-600">
+                {confirmationCode || 'A7-X9-K2-P4'}
+              </p>
+              <p className="mt-2 text-xs leading-6 text-slate-500">
+                {t('احتفظ بهذا الرمز لمراجعة حالة العملية لاحقًا.', 'Keep this code to review the transaction status later.')}
+              </p>
+            </div>
           </div>
         )}
       </div>

@@ -14,7 +14,10 @@ import {
   postImport,
   putAdminElection,
 } from '../controllers/admin.controller.js';
-import { adminMiddleware } from '../middleware/adminMiddleware.js';
+import {
+  adminMiddleware,
+  electionManagementMiddleware,
+} from '../middleware/adminMiddleware.js';
 import { authMiddleware } from '../middleware/authMiddleware.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 
@@ -31,14 +34,19 @@ adminRoutes.use(authMiddleware, adminMiddleware);
 
 adminRoutes.get('/import/config', asyncHandler(getImportConfig));
 adminRoutes.get('/import/batches', asyncHandler(getImportBatches));
-adminRoutes.post('/import/:kind', upload.single('file'), asyncHandler(postImport));
-adminRoutes.delete('/import/batches/:batchId', asyncHandler(deleteImportBatch));
-adminRoutes.post('/system/reset-data', asyncHandler(postResetSystemData));
+adminRoutes.post(
+  '/import/:kind',
+  electionManagementMiddleware,
+  upload.single('file'),
+  asyncHandler(postImport),
+);
+adminRoutes.delete('/import/batches/:batchId', electionManagementMiddleware, asyncHandler(deleteImportBatch));
+adminRoutes.post('/system/reset-data', electionManagementMiddleware, asyncHandler(postResetSystemData));
 
 adminRoutes.get('/elections', asyncHandler(getAdminElections));
-adminRoutes.post('/elections', asyncHandler(postAdminElection));
+adminRoutes.post('/elections', electionManagementMiddleware, asyncHandler(postAdminElection));
 adminRoutes.get('/elections/:id/setup-summary', asyncHandler(getAdminElectionSetupSummary));
 adminRoutes.get('/elections/:id', asyncHandler(getAdminElectionById));
-adminRoutes.put('/elections/:id', asyncHandler(putAdminElection));
-adminRoutes.patch('/elections/:id/status', asyncHandler(patchAdminElectionStatus));
-adminRoutes.delete('/elections/:id', asyncHandler(deleteAdminElection));
+adminRoutes.put('/elections/:id', electionManagementMiddleware, asyncHandler(putAdminElection));
+adminRoutes.patch('/elections/:id/status', electionManagementMiddleware, asyncHandler(patchAdminElectionStatus));
+adminRoutes.delete('/elections/:id', electionManagementMiddleware, asyncHandler(deleteAdminElection));

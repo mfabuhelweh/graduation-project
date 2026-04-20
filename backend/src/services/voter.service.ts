@@ -8,6 +8,7 @@ import type { Voter } from '../models/voter.model.js';
 import { addAuditLog } from './audit.service.js';
 import { isElectionActiveForVoting } from '../utils/electionState.js';
 import { createOpaqueToken, hashToken } from '../utils/token.js';
+import { createDefaultVoterPasswordHash } from '../utils/password.js';
 
 const collection = adminDb.collection('voters');
 
@@ -151,12 +152,14 @@ export async function createVoter(data: Voter, actor = 'system') {
       throw new Error('electionId and districtId are required to create a voter');
     }
 
+    const defaultPasswordHash = await createDefaultVoterPasswordHash();
+
     const result = await query(
       `INSERT INTO voters (
          election_id, district_id, full_name, national_id, gender, birth_date, phone_number, email,
-         id_card_image_url, face_template_hash, has_voted, verified_face, status
+         password_hash, id_card_image_url, face_template_hash, has_voted, verified_face, status
        )
-       VALUES ($1, $2, $3, $4, $5::candidate_gender, $6::date, $7, $8, $9, $10, COALESCE($11, false), COALESCE($12, false), COALESCE($13::voter_status, 'eligible'))
+       VALUES ($1, $2, $3, $4, $5::candidate_gender, $6::date, $7, $8, $9, $10, $11, COALESCE($12, false), COALESCE($13, false), COALESCE($14::voter_status, 'eligible'))
        RETURNING *`,
       [
         data.electionId,
@@ -167,6 +170,7 @@ export async function createVoter(data: Voter, actor = 'system') {
         (data as any).birthDate || null,
         (data as any).phoneNumber || null,
         (data as any).email || null,
+        defaultPasswordHash,
         (data as any).idCardImageUrl || null,
         (data as any).faceTemplateHash || null,
         data.hasVoted ?? false,
@@ -257,6 +261,9 @@ export async function verifyFaceAndIssueToken(
   },
   authenticatedUser: AuthenticatedUser,
   actor = 'system',
+  options?: {
+    allowDemoVerification?: boolean;
+  },
 ) {
   if (!data.electionId || !data.nationalId) {
     throw new Error('electionId and nationalId are required');
@@ -277,8 +284,10 @@ export async function verifyFaceAndIssueToken(
     throw new Error('Authenticated voter does not match the requested ballot');
   }
 
-  if (!env.enableDevAuth) {
-    throw new Error('Face verification is not configured on the server');
+  if (!options?.allowDemoVerification) {
+    const error = new Error('Face verification is disabled in this environment');
+    (error as Error & {status?: number}).status = 503;
+    throw error;
   }
 
   if (env.enableMemoryStore) {

@@ -10,7 +10,7 @@ import { useAuth } from "@/hooks/useAuth";
 export default function VoterLayout() {
   const { isHydrated, isHydrating, isAuthenticated } = useAuth();
   const { colors, language } = useAppPreferences();
-  const styles = useMemo(() => createStyles(colors.primaryGlow), [colors.primaryGlow]);
+  const styles = useMemo(() => createStyles(colors.primaryGlow, colors.primary), [colors.primary, colors.primaryGlow]);
 
   if (!isHydrated || isHydrating) {
     return (
@@ -21,7 +21,7 @@ export default function VoterLayout() {
   }
 
   if (!isAuthenticated) {
-    return <Redirect href="/(auth)/login" />;
+    return <Redirect href="/sanad" />;
   }
 
   return (
@@ -29,15 +29,26 @@ export default function VoterLayout() {
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: colors.primaryLight,
-        tabBarInactiveTintColor: colors.inactive,
+        tabBarInactiveTintColor: colors.textMuted,
         tabBarStyle: {
-          height: 64,
+          position: "absolute",
+          left: 16,
+          right: 16,
+          bottom: 14,
+          height: 66,
           paddingBottom: 10,
-          paddingTop: 6,
+          paddingTop: 8,
+          borderRadius: 28,
           backgroundColor: colors.surface,
           borderTopColor: colors.border,
           borderTopWidth: 1,
-          elevation: 0
+          borderWidth: 1,
+          borderColor: colors.border,
+          elevation: 12,
+          shadowColor: "#000000",
+          shadowOpacity: 0.28,
+          shadowRadius: 18,
+          shadowOffset: { width: 0, height: 8 }
         },
         tabBarLabelStyle: {
           fontSize: 11,
@@ -95,13 +106,15 @@ export default function VoterLayout() {
   );
 }
 
-function createStyles(primaryGlow: string) {
+function createStyles(primaryGlow: string, primary: string) {
   return StyleSheet.create({
     focusedTab: {
       backgroundColor: primaryGlow,
-      borderRadius: 10,
-      paddingHorizontal: 6,
-      paddingVertical: 2
+      borderRadius: 16,
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      borderWidth: 1,
+      borderColor: primary
     }
   });
 }

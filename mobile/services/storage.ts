@@ -120,7 +120,7 @@ export async function loadAppPreferences(): Promise<AppPreferences> {
   return (
     (await getJsonValue<AppPreferences>(APP_PREFERENCES_KEY)) || {
       language: "ar",
-      theme: "dark"
+      theme: "light"
     }
   );
 }

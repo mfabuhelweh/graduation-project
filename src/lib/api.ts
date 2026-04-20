@@ -32,6 +32,16 @@ function resolveApiBaseUrl(): string {
 const API_BASE_URL = resolveApiBaseUrl();
 const DEV_AUTH_ENABLED = import.meta.env.DEV && import.meta.env.VITE_ENABLE_DEV_AUTH === 'true';
 
+function getDemoModeHeaders(mode: 'sanad-otp' | 'face-verification' | 'sms') {
+  if (!DEV_AUTH_ENABLED) {
+    return {};
+  }
+
+  return {
+    'X-Demo-Mode': mode,
+  };
+}
+
 const AUTH_TOKEN_KEY = 'vote_secure_auth_token';
 
 export interface ApiResponse<T> {
@@ -86,6 +96,7 @@ export interface RegisterPayload {
 
 export interface SanadStartPayload {
   nationalId: string;
+  password: string;
 }
 
 export interface SanadOtpPayload {
@@ -393,7 +404,10 @@ export async function registerWithBackend(payload: RegisterPayload) {
 export async function startSanadLogin(payload: SanadStartPayload) {
   const response = await apiFetch('/auth/sanad/start', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...getDemoModeHeaders('sanad-otp'),
+    },
     body: JSON.stringify(payload),
   });
   const body = await response.json().catch(() => null);
@@ -444,6 +458,7 @@ export async function fetchMe() {
 export async function verifyFaceAndIssueToken(payload: FaceVerificationPayload) {
   const response = await request<ApiResponse<any>>('/voters/verify-face', {
     method: 'POST',
+    headers: getDemoModeHeaders('face-verification'),
     body: JSON.stringify(payload),
   });
   return response.data;

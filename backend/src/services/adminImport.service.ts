@@ -1,6 +1,7 @@
 import * as XLSX from 'xlsx';
 import { query, withTransaction } from '../db/pool.js';
 import { resolveAdminId } from './election.service.js';
+import { createDefaultVoterPasswordHash } from '../utils/password.js';
 
 export const IMPORT_FILE_ORDER = [
   'districts',
@@ -247,6 +248,11 @@ async function lookupDistrictList(client: any, electionId: string, districtId: s
   return (result.rows[0] as { id: string } | undefined)?.id || null;
 }
 
+async function rowExists(client: any, sql: string, params: unknown[]) {
+  const result = await client.query(sql, params);
+  return Boolean(result.rows[0]);
+}
+
 async function processRows(
   kind: ImportKind,
   file: UploadedImportFile,
@@ -365,6 +371,17 @@ export async function importSpreadsheet(
         }
 
         const electionId = await resolveImportElectionId(client, row, resolvedElectionId);
+        const alreadyExists = await rowExists(
+          client,
+          `SELECT id
+           FROM districts
+           WHERE election_id = $1 AND code = $2
+           LIMIT 1`,
+          [electionId, districtCode],
+        );
+        if (alreadyExists) {
+          throw new Error(`District code "${districtCode}" is already imported for this election`);
+        }
 
         const inserted = await client.query(
           `INSERT INTO districts (election_id, name, code, seats_count)
@@ -392,6 +409,22 @@ export async function importSpreadsheet(
           if (!district) throw new Error(`District "${districtCode}" was not found`);
           districtId = district.id;
         }
+        const duplicateQuota = await rowExists(
+          client,
+          `SELECT id
+           FROM quotas
+           WHERE election_id = $1
+             AND lower(name) = lower($2)
+             AND (
+               ($3::uuid IS NULL AND district_id IS NULL)
+               OR district_id = $3::uuid
+             )
+           LIMIT 1`,
+          [electionId, quotaName, districtId],
+        );
+        if (duplicateQuota) {
+          throw new Error(`Quota "${quotaName}" already exists in this scope`);
+        }
 
         const inserted = await client.query(
           `INSERT INTO quotas (election_id, district_id, name, description)
@@ -414,6 +447,17 @@ export async function importSpreadsheet(
         }
 
         const electionId = await resolveImportElectionId(client, row, resolvedElectionId);
+        const alreadyExists = await rowExists(
+          client,
+          `SELECT id
+           FROM parties
+           WHERE election_id = $1 AND party_code = $2
+           LIMIT 1`,
+          [electionId, partyCode],
+        );
+        if (alreadyExists) {
+          throw new Error(`Party code "${partyCode}" is already imported for this election`);
+        }
 
         const inserted = await client.query(
           `INSERT INTO parties (election_id, party_name, party_code, logo_url, description)
@@ -442,6 +486,28 @@ export async function importSpreadsheet(
         const partyId = await lookupParty(client, electionId, partyCode);
         if (!partyId) throw new Error(`Party "${partyCode}" was not found`);
         const quotaId = await lookupQuota(client, electionId, null, normalizeNullable(row.quota_name));
+        const duplicateNationalId = await rowExists(
+          client,
+          `SELECT id
+           FROM party_candidates
+           WHERE party_id = $1 AND national_id = $2
+           LIMIT 1`,
+          [partyId, nationalId],
+        );
+        if (duplicateNationalId) {
+          throw new Error(`Duplicate national ID "${nationalId}" in party "${partyCode}" candidates`);
+        }
+        const duplicateOrder = await rowExists(
+          client,
+          `SELECT id
+           FROM party_candidates
+           WHERE party_id = $1 AND candidate_order = $2
+           LIMIT 1`,
+          [partyId, candidateOrder],
+        );
+        if (duplicateOrder) {
+          throw new Error(`Candidate order "${candidateOrder}" is already used inside party "${partyCode}"`);
+        }
 
         const inserted = await client.query(
           `INSERT INTO party_candidates (
@@ -474,6 +540,19 @@ export async function importSpreadsheet(
         const electionId = await resolveImportElectionId(client, row, resolvedElectionId);
         const district = await lookupDistrict(client, electionId, districtCode);
         if (!district) throw new Error(`District "${districtCode}" was not found`);
+        const alreadyExists = await rowExists(
+          client,
+          `SELECT id
+           FROM district_lists
+           WHERE election_id = $1
+             AND district_id = $2
+             AND list_code = $3
+           LIMIT 1`,
+          [electionId, district.id, listCode],
+        );
+        if (alreadyExists) {
+          throw new Error(`List code "${listCode}" is already imported in district "${districtCode}"`);
+        }
 
         const inserted = await client.query(
           `INSERT INTO district_lists (election_id, district_id, list_name, list_code, description)
@@ -511,6 +590,41 @@ export async function importSpreadsheet(
         const districtListId = await lookupDistrictList(client, electionId, district.id, listCode);
         if (!districtListId) throw new Error(`District list "${listCode}" was not found`);
         const quotaId = await lookupQuota(client, electionId, district.id, normalizeNullable(row.quota_name));
+        const duplicateNationalId = await rowExists(
+          client,
+          `SELECT id
+           FROM district_list_candidates
+           WHERE district_list_id = $1 AND national_id = $2
+           LIMIT 1`,
+          [districtListId, nationalId],
+        );
+        if (duplicateNationalId) {
+          throw new Error(`Duplicate national ID "${nationalId}" in district list "${listCode}"`);
+        }
+        const duplicateOrder = await rowExists(
+          client,
+          `SELECT id
+           FROM district_list_candidates
+           WHERE district_list_id = $1 AND candidate_order = $2
+           LIMIT 1`,
+          [districtListId, candidateOrder],
+        );
+        if (duplicateOrder) {
+          throw new Error(`Candidate order "${candidateOrder}" is already used in district list "${listCode}"`);
+        }
+        if (candidateNumber) {
+          const duplicateCandidateNumber = await rowExists(
+            client,
+            `SELECT id
+             FROM district_list_candidates
+             WHERE district_list_id = $1 AND candidate_number = $2
+             LIMIT 1`,
+            [districtListId, candidateNumber],
+          );
+          if (duplicateCandidateNumber) {
+            throw new Error(`Candidate number "${candidateNumber}" is already used in district list "${listCode}"`);
+          }
+        }
 
         const inserted = await client.query(
           `INSERT INTO district_list_candidates (
@@ -554,12 +668,24 @@ export async function importSpreadsheet(
         const electionId = await resolveImportElectionId(client, row, resolvedElectionId);
         const district = await lookupDistrict(client, electionId, districtCode);
         if (!district) throw new Error(`District "${districtCode}" was not found`);
+        const duplicateNationalId = await rowExists(
+          client,
+          `SELECT id
+           FROM voters
+           WHERE election_id = $1 AND national_id = $2
+           LIMIT 1`,
+          [electionId, nationalId],
+        );
+        if (duplicateNationalId) {
+          throw new Error(`Duplicate national ID "${nationalId}" already exists in this election`);
+        }
+        const passwordHash = await createDefaultVoterPasswordHash();
 
         const inserted = await client.query(
           `INSERT INTO voters (
-             election_id, district_id, full_name, national_id, gender, birth_date, phone_number, email, status
+             election_id, district_id, full_name, national_id, gender, birth_date, phone_number, email, password_hash, status
            )
-           VALUES ($1, $2, $3, $4, $5::candidate_gender, $6::date, $7, $8, $9::voter_status)
+           VALUES ($1, $2, $3, $4, $5::candidate_gender, $6::date, $7, $8, $9, $10::voter_status)
            ON CONFLICT (election_id, national_id) DO NOTHING
            RETURNING id`,
           [
@@ -571,6 +697,7 @@ export async function importSpreadsheet(
             birthDate,
             normalizeNullable(row.phone_number),
             normalizeNullable(row.email),
+            passwordHash,
             normalizeVoterStatus(row.status),
           ],
         );

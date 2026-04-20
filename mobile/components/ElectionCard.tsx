@@ -1,7 +1,8 @@
 import { StyleSheet, TouchableOpacity, View } from "react-native";
 import { Text } from "react-native-paper";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { colors } from "@/constants/colors";
+import { useMemo } from "react";
+import { useAppPreferences } from "@/hooks/useAppPreferences";
 import type { Election } from "@/types";
 import {
   formatDate,
@@ -18,28 +19,32 @@ interface ElectionCardProps {
 export function ElectionCard({
   election,
   onPress,
-  actionLabel = "عرض التفاصيل"
+  actionLabel
 }: ElectionCardProps) {
+  const { colors, theme, language } = useAppPreferences();
+  const styles = useMemo(() => createStyles(colors, theme), [colors, theme]);
   const phase = resolveElectionPhase(election);
+  const isArabic = language === "ar";
+  const resolvedActionLabel = actionLabel || (isArabic ? "عرض التفاصيل" : "View details");
 
   const phaseConfig = {
     active: {
       color: colors.success,
       bg: colors.successBg,
       icon: "vote" as const,
-      label: getElectionStatusLabel(election)
+      label: getElectionStatusLabel(election, language)
     },
     upcoming: {
       color: colors.warning,
       bg: colors.warningBg,
       icon: "clock-outline" as const,
-      label: getElectionStatusLabel(election)
+      label: getElectionStatusLabel(election, language)
     },
     ended: {
       color: colors.textMuted,
       bg: colors.surfaceAlt,
       icon: "check-circle-outline" as const,
-      label: getElectionStatusLabel(election)
+      label: getElectionStatusLabel(election, language)
     }
   };
 
@@ -82,13 +87,13 @@ export function ElectionCard({
         {/* التواريخ */}
         <View style={styles.meta}>
           <View style={styles.metaItem}>
-            <Text style={styles.metaValue}>{formatDate(election.endAt)}</Text>
-            <Text style={styles.metaKey}>انتهاء</Text>
+            <Text style={styles.metaValue}>{formatDate(election.endAt, language)}</Text>
+            <Text style={styles.metaKey}>{isArabic ? "انتهاء" : "Ends"}</Text>
           </View>
           <View style={styles.metaDivider} />
           <View style={styles.metaItem}>
-            <Text style={styles.metaValue}>{formatDate(election.startAt)}</Text>
-            <Text style={styles.metaKey}>بداية</Text>
+            <Text style={styles.metaValue}>{formatDate(election.startAt, language)}</Text>
+            <Text style={styles.metaKey}>{isArabic ? "بداية" : "Starts"}</Text>
           </View>
         </View>
 
@@ -114,7 +119,7 @@ export function ElectionCard({
               { color: phase === "active" ? "#fff" : colors.primary }
             ]}
           >
-            {actionLabel}
+            {resolvedActionLabel}
           </Text>
         </TouchableOpacity>
       </View>
@@ -122,13 +127,21 @@ export function ElectionCard({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ReturnType<typeof useAppPreferences>["colors"], theme: "light" | "dark") {
+  const isLight = theme === "light";
+
+  return StyleSheet.create({
   card: {
     backgroundColor: colors.surface,
-    borderRadius: 18,
+    borderRadius: 20,
     overflow: "hidden",
     borderWidth: 1,
-    borderColor: colors.border
+    borderColor: colors.border,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: isLight ? 0.09 : 0.18,
+    shadowRadius: 20,
+    elevation: 6
   },
   statusBar: {
     height: 3
@@ -201,7 +214,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
     paddingVertical: 12,
-    borderRadius: 12
+    borderRadius: 16
   },
   actionButtonActive: {
     backgroundColor: colors.primary
@@ -215,4 +228,5 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     fontSize: 14
   }
-});
+  });
+}

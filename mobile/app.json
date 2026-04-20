@@ -36,11 +36,21 @@
     "ios": {
       "bundleIdentifier": "com.graduationproject.votesecurevoter",
       "buildNumber": "1",
-      "supportsTablet": false
+      "supportsTablet": false,
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "web": {
       "bundler": "metro",
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "3e59ae68-fc9b-4fd5-9d50-e8a457c85995"
+      }
+    },
+    "owner": "abuhewleh2024"
   }
 }

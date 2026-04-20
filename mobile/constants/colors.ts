@@ -1,51 +1,51 @@
 export type AppThemeMode = "light" | "dark";
 
 const sharedColors = {
-  primary: "#0f766e",
-  primaryLight: "#14b8a6",
-  primaryDark: "#134e4a",
-  accent: "#f59e0b",
-  accentLight: "#fbbf24",
-  success: "#10b981",
-  successBg: "rgba(16, 185, 129, 0.12)",
-  warning: "#f59e0b",
-  warningBg: "rgba(245, 158, 11, 0.12)",
-  error: "#ef4444",
-  errorBg: "rgba(239, 68, 68, 0.12)",
-  info: "#3b82f6",
-  infoBg: "rgba(59, 130, 246, 0.12)"
+  primary: "#1F5AA9",
+  primaryLight: "#2F75D6",
+  primaryDark: "#171717",
+  accent: "#2F75D6",
+  accentLight: "#B88A2C",
+  success: "#1F5AA9",
+  successBg: "rgba(31, 90, 169, 0.10)",
+  warning: "#D4AF37",
+  warningBg: "rgba(212, 175, 55, 0.10)",
+  error: "#EF4444",
+  errorBg: "rgba(239, 68, 68, 0.11)",
+  info: "#171717",
+  infoBg: "rgba(23, 23, 23, 0.08)"
 } as const;
 
 export const darkColors = {
   ...sharedColors,
-  primaryGlow: "rgba(15, 118, 110, 0.25)",
-  background: "#0a0f1e",
-  backgroundCard: "#0f1629",
-  surface: "#141c35",
-  surfaceAlt: "#1a2444",
-  surfacePressed: "#1e2a52",
-  border: "#1e2d4f",
-  borderLight: "#253659",
-  text: "#e2e8f0",
-  textMuted: "#64748b",
-  textSoft: "#94a3b8",
-  inactive: "#334155"
+  primaryGlow: "rgba(95, 162, 255, 0.16)",
+  background: "#101413",
+  backgroundCard: "#202B26",
+  surface: "#181F1C",
+  surfaceAlt: "#202B26",
+  surfacePressed: "#26372F",
+  border: "rgba(95, 162, 255, 0.30)",
+  borderLight: "rgba(255, 255, 255, 0.08)",
+  text: "#F8FAFC",
+  textMuted: "#A7B5AD",
+  textSoft: "#E3EBE7",
+  inactive: "#67756D"
 } as const;
 
 export const lightColors = {
   ...sharedColors,
-  primaryGlow: "rgba(15, 118, 110, 0.12)",
-  background: "#f4f7fb",
-  backgroundCard: "#ffffff",
-  surface: "#ffffff",
-  surfaceAlt: "#e9eff7",
-  surfacePressed: "#edf4fb",
-  border: "#d7e2ef",
-  borderLight: "#e7eef7",
-  text: "#10233f",
-  textMuted: "#6a7a90",
-  textSoft: "#4b5d75",
-  inactive: "#94a3b8"
+  primaryGlow: "rgba(31, 90, 169, 0.12)",
+  background: "#F6F8F7",
+  backgroundCard: "#EDF3EF",
+  surface: "#FFFFFF",
+  surfaceAlt: "#EDF3EF",
+  surfacePressed: "#E3ECE7",
+  border: "rgba(31, 90, 169, 0.22)",
+  borderLight: "rgba(23, 23, 23, 0.08)",
+  text: "#1B2420",
+  textMuted: "#65736B",
+  textSoft: "#33443C",
+  inactive: "#98A49E"
 } as const;
 
 export interface AppColors {
