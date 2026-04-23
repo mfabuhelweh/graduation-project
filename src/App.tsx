@@ -13,14 +13,16 @@ import {
 import { Capacitor } from '@capacitor/core';
 import { AnimatePresence, motion } from 'motion/react';
 import { cn } from './lib/utils';
-import { filterFixedElections } from './lib/fixedElections';
 import {
   castVote,
   clearAuthToken,
   completeSanadLogin,
+  fetchAdminElections,
   fetchElections,
+  fetchVoters,
   fetchMe,
   getAuthToken,
+  loginAdminWithBackend,
   loginAdminWithGoogleCredential,
 } from './lib/api';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -37,6 +39,7 @@ import { VotingPage } from './pages/VotingPage';
 import { Settings } from './pages/Settings';
 import { LoginPage } from './pages/LoginPage';
 import { Notifications } from './pages/Notifications';
+import { VoterRegistry } from './pages/VoterRegistry';
 import { ElectionsPage } from './pages/admin/ElectionsPage';
 import { CreateElectionPage } from './pages/admin/CreateElectionPage';
 import { ElectionDetailsPage } from './pages/admin/ElectionDetailsPage';
@@ -44,6 +47,7 @@ import soutakEmblem from './assets/soutak-emblem.png';
 
 type Tab =
   | 'Dashboard'
+  | 'Voter Registry'
   | 'Elections'
   | 'Create Election'
   | 'Election Details'
@@ -79,10 +83,14 @@ export default function App() {
   const [isLoginLoading, setIsLoginLoading] = React.useState(false);
   const [loginError, setLoginError] = React.useState<string | null>(null);
   const [dbElections, setDbElections] = React.useState<any[]>([]);
+  const [adminVoters, setAdminVoters] = React.useState<any[]>([]);
+  const [votersLoading, setVotersLoading] = React.useState(false);
+  const [voterSearchQuery, setVoterSearchQuery] = React.useState('');
   const [selectedElectionId, setSelectedElectionId] = React.useState<string | null>(null);
   const [toast, setToast] = React.useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const mobileShell = useMobileShell();
 
+  const isAdminRoute = typeof window !== 'undefined' && window.location.pathname.replace(/\/+$/, '') === '/admin';
   const isAdmin = userProfile?.role === 'admin';
   const normalizedAdminRole = String(userProfile?.adminRole || '').toLowerCase();
   const canViewSensitiveResults = !isAdmin
@@ -96,7 +104,7 @@ export default function App() {
       ? electionManagerAdminRoles.has(normalizedAdminRole)
       : true;
   const isNativeApp = Capacitor.isNativePlatform();
-  const showAdminShell = Boolean(isAdmin && !isNativeApp);
+  const showAdminShell = Boolean(isAdmin && !isNativeApp && isAdminRoute);
   const selectedElection = dbElections.find((election) => election.id === selectedElectionId) || null;
   const voterBoundElection =
     (!isAdmin && userProfile?.electionId
@@ -139,6 +147,21 @@ export default function App() {
           return;
         }
 
+        if (!Capacitor.isNativePlatform() && isAdminRoute && profile.role !== 'admin') {
+          clearAuthToken();
+          setLoginError(
+            language === 'ar'
+              ? 'هذا الرابط مخصص لدخول الأدمن فقط. سجّل الدخول بحساب أدمن.'
+              : 'This route is for admin sign-in only. Sign in with an admin account.',
+          );
+          setIsAuthReady(true);
+          return;
+        }
+
+        if (!Capacitor.isNativePlatform() && profile.role === 'admin' && !isAdminRoute) {
+          window.history.replaceState(null, '', '/admin');
+        }
+
         const normalized = {
           uid: profile.uid,
           displayName: profile.fullName || profile.email || 'User',
@@ -160,19 +183,45 @@ export default function App() {
     };
 
     bootstrap();
-  }, [language]);
+  }, [isAdminRoute, language]);
 
   const loadElections = React.useCallback(async () => {
-    const elections = await fetchElections();
-    setDbElections(filterFixedElections(elections));
+    const shouldLoadAdminElections =
+      user?.role === 'admin' || userProfile?.role === 'admin' || (!Capacitor.isNativePlatform() && isAdminRoute);
+    const elections = shouldLoadAdminElections ? await fetchAdminElections() : await fetchElections();
+    setDbElections(Array.isArray(elections) ? elections : []);
+  }, [isAdminRoute, user?.role, userProfile?.role]);
+
+  const loadVoters = React.useCallback(async () => {
+    setVotersLoading(true);
+    try {
+      const voters = await fetchVoters();
+      setAdminVoters(voters);
+    } finally {
+      setVotersLoading(false);
+    }
   }, []);
 
   React.useEffect(() => {
     if (!user) return;
-    loadElections().catch((error) => {
-      console.error('Failed to load elections', error);
+    const jobs = [loadElections()];
+    if (user.role === 'admin') {
+      jobs.push(loadVoters());
+    }
+
+    Promise.all(jobs).catch((error) => {
+      console.error('Failed to load admin data', error);
     });
-  }, [user, loadElections]);
+  }, [user, loadElections, loadVoters]);
+
+  React.useEffect(() => {
+    if (!showAdminShell) return;
+    if (!['Elections', 'Create Election', 'Election Details'].includes(activeTab)) return;
+
+    loadElections().catch((error) => {
+      console.error('Failed to refresh elections for admin shell', error);
+    });
+  }, [activeTab, loadElections, showAdminShell]);
 
   const applyAuthenticatedUser = (result: any) => {
     const profile = {
@@ -184,6 +233,9 @@ export default function App() {
       electionId: result.user.electionId,
       nationalId: result.user.nationalId,
     };
+    if (profile.role === 'admin' && !Capacitor.isNativePlatform() && !isAdminRoute) {
+      window.history.replaceState(null, '', '/admin');
+    }
     setUser(profile);
     setUserProfile(profile);
     setActiveTab(profile.role === 'admin' ? 'Dashboard' : 'Voting');
@@ -226,6 +278,20 @@ export default function App() {
     }
   };
 
+  const handleAdminPasswordLogin = async (email: string, password: string) => {
+    try {
+      setIsLoginLoading(true);
+      setLoginError(null);
+      const result = await loginAdminWithBackend(email, password);
+      applyAuthenticatedUser(result);
+    } catch (error) {
+      setLoginError(error instanceof Error ? error.message : 'Admin login failed');
+      throw error;
+    } finally {
+      setIsLoginLoading(false);
+    }
+  };
+
   const performLogout = () => {
     clearAuthToken();
     setUser(null);
@@ -256,6 +322,13 @@ export default function App() {
     }
   }, [activeTab, canManageElectionData, canViewSensitiveResults, showAdminShell]);
 
+  React.useEffect(() => {
+    if (!showAdminShell || activeTab !== 'Voter Registry') return;
+    loadVoters().catch((error) => {
+      console.error('Failed to refresh voters', error);
+    });
+  }, [activeTab, loadVoters, showAdminShell]);
+
   if (!isAuthReady) {
     return (
       <ErrorBoundary>
@@ -271,16 +344,21 @@ export default function App() {
       <ErrorBoundary>
         <LoginPage
           onSanadComplete={handleSanadComplete}
+          onAdminPasswordLogin={handleAdminPasswordLogin}
           onAdminGoogleLogin={handleAdminGoogleLogin}
           isLoading={isLoginLoading}
           error={loginError}
           language={language}
+          theme={theme}
+          onToggleTheme={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+          adminOnly={isAdminRoute && !isNativeApp}
         />
       </ErrorBoundary>
     );
   }
 
   const adminSidebarItems = [
+    { key: 'Voter Registry', label: language === 'ar' ? 'سجل الناخبين' : 'Voter Registry', icon: Users },
     { key: 'Dashboard', label: language === 'ar' ? 'لوحة التحكم' : 'Dashboard', icon: LayoutDashboard },
     { key: 'Elections', label: language === 'ar' ? 'الانتخابات' : 'Elections', icon: FileText },
     ...(canViewSensitiveResults
@@ -306,8 +384,8 @@ export default function App() {
 
   const voterPrimaryTabs: Tab[] = ['Voting', 'Results', 'Notifications', 'Settings'];
   const adminPrimaryTabs: Tab[] = canViewSensitiveResults
-    ? ['Dashboard', 'Elections', 'Results', 'Settings']
-    : ['Dashboard', 'Elections', 'Settings'];
+    ? ['Dashboard', 'Voter Registry', 'Elections', 'Results', 'Settings']
+    : ['Dashboard', 'Voter Registry', 'Elections', 'Settings'];
   const primaryTabs = showAdminShell ? adminPrimaryTabs : voterPrimaryTabs;
 
   const mobileNavItems = primaryTabs.map((tabKey) => {
@@ -435,8 +513,11 @@ export default function App() {
             <SiteHeader
               language={language}
               onToggleLanguage={() => setLanguage(language === 'ar' ? 'en' : 'ar')}
+              theme={theme}
+              onToggleTheme={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
               userDisplayName={user?.displayName}
               navItems={headerNavItems}
+              hideNav={showAdminShell}
             />
           )}
 
@@ -471,12 +552,25 @@ export default function App() {
               />
             )}
 
+            {showAdminShell && activeTab === 'Voter Registry' && (
+              <VoterRegistry
+                voters={adminVoters}
+                searchQuery={voterSearchQuery}
+                onSearchChange={setVoterSearchQuery}
+                loading={votersLoading}
+              />
+            )}
+
             {showAdminShell && activeTab === 'Elections' && (
               <ElectionsPage
                 elections={dbElections}
                 language={language}
                 setToast={setToast}
                 canManageElectionData={canManageElectionData}
+                onCreate={() => {
+                  setSelectedElectionId(null);
+                  setActiveTab('Create Election');
+                }}
                 onOpenDetails={(electionId) => {
                   setSelectedElectionId(electionId);
                   setActiveTab('Election Details');
@@ -485,24 +579,30 @@ export default function App() {
                   setSelectedElectionId(electionId);
                   setActiveTab('Create Election');
                 }}
-                onRefresh={loadElections}
+                onRefresh={async () => {
+                  await Promise.all([loadElections(), loadVoters()]);
+                }}
               />
             )}
 
             {showAdminShell && activeTab === 'Create Election' && (
               <CreateElectionPage
                 setToast={setToast}
-                onCancel={() => setActiveTab('Elections')}
+                onCancel={() => {
+                  setSelectedElectionId(null);
+                  setActiveTab('Elections');
+                }}
                 initialElection={selectedElection}
+                editingElectionId={selectedElectionId}
                 canManageElectionData={canManageElectionData}
                 onCreated={async (election) => {
-                  await loadElections();
+                  await Promise.all([loadElections(), loadVoters()]);
                   setSelectedElectionId(election.id);
-                  setActiveTab('Elections');
+                  setActiveTab('Election Details');
                 }}
                 onDeleted={async () => {
                   setSelectedElectionId(null);
-                  await loadElections();
+                  await Promise.all([loadElections(), loadVoters()]);
                   setActiveTab('Elections');
                 }}
               />
@@ -514,7 +614,9 @@ export default function App() {
                 setToast={setToast}
                 canManageElectionData={canManageElectionData}
                 onBack={() => setActiveTab('Elections')}
-                onRefreshList={loadElections}
+                onRefreshList={async () => {
+                  await Promise.all([loadElections(), loadVoters()]);
+                }}
               />
             )}
 

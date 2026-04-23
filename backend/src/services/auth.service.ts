@@ -3,7 +3,6 @@ import { createHash, randomInt } from 'node:crypto';
 import jwt from 'jsonwebtoken';
 import { OAuth2Client } from 'google-auth-library';
 import { env } from '../config/env.js';
-import { VISIBLE_SYSTEM_ELECTION_TITLES } from '../constants/systemElections.js';
 import { query, withTransaction } from '../db/pool.js';
 import { createDefaultVoterPasswordHash, hashPassword } from '../utils/password.js';
 
@@ -174,19 +173,23 @@ async function findVoterForSanad(nationalId: string) {
      JOIN elections e ON e.id = v.election_id
      WHERE v.national_id = $1
      ORDER BY
-       CASE
-         WHEN e.title = ANY($2::text[]) THEN 0
-         ELSE 1
-       END,
        CASE e.status
          WHEN 'active' THEN 0
          WHEN 'scheduled' THEN 1
-         ELSE 2
+         WHEN 'draft' THEN 2
+         WHEN 'closed' THEN 3
+         ELSE 4
        END,
+       CASE
+         WHEN e.start_at IS NULL THEN 1
+         WHEN e.start_at <= now() THEN 0
+         ELSE 1
+       END,
+       e.start_at ASC NULLS LAST,
        e.created_at DESC,
        v.created_at DESC
      LIMIT 1`,
-    [nationalId, [...VISIBLE_SYSTEM_ELECTION_TITLES]],
+    [nationalId],
   );
 
   return result.rows[0] || null;

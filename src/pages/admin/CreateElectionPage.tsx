@@ -3,6 +3,7 @@ import { CalendarClock, Clock3, Info, Loader2, Save, Trash2, X } from 'lucide-re
 import {
   createAdminElection,
   deleteAdminElection,
+  fetchAdminElectionDetails,
   updateAdminElection,
   type ElectionFormPayload,
 } from '../../lib/api';
@@ -13,6 +14,7 @@ interface CreateElectionPageProps {
   onDeleted?: () => Promise<void> | void;
   onCancel: () => void;
   initialElection?: any | null;
+  editingElectionId?: string | null;
   canManageElectionData: boolean;
 }
 
@@ -104,17 +106,58 @@ export const CreateElectionPage = ({
   onDeleted,
   onCancel,
   initialElection,
+  editingElectionId,
   canManageElectionData,
 }: CreateElectionPageProps) => {
   const [form, setForm] = React.useState<ElectionFormPayload>(() => mapElectionToForm(initialElection));
+  const [loadedElection, setLoadedElection] = React.useState<any | null>(initialElection || null);
+  const [isLoadingElection, setIsLoadingElection] = React.useState(false);
   const [isSaving, setIsSaving] = React.useState(false);
   const [isDeleting, setIsDeleting] = React.useState(false);
 
-  React.useEffect(() => {
-    setForm(mapElectionToForm(initialElection));
-  }, [initialElection]);
+  const editElectionId = editingElectionId || initialElection?.id || null;
+  const isEditMode = Boolean(editElectionId);
 
-  const isEditMode = Boolean(initialElection?.id);
+  React.useEffect(() => {
+    let cancelled = false;
+
+    if (!editElectionId) {
+      setLoadedElection(null);
+      setForm(mapElectionToForm(null));
+      setIsLoadingElection(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    if (initialElection?.id === editElectionId) {
+      setLoadedElection(initialElection);
+      setForm(mapElectionToForm(initialElection));
+      setIsLoadingElection(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    setIsLoadingElection(true);
+    fetchAdminElectionDetails(editElectionId)
+      .then((election) => {
+        if (cancelled) return;
+        setLoadedElection(election);
+        setForm(mapElectionToForm(election));
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        showToast(error instanceof Error ? error.message : 'تعذر تحميل بيانات الانتخاب للتعديل.', 'error');
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingElection(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [editElectionId, initialElection]);
 
   const updateField = <K extends keyof ElectionFormPayload>(field: K, value: ElectionFormPayload[K]) => {
     setForm((current) => ({ ...current, [field]: value }));
@@ -154,7 +197,7 @@ export const CreateElectionPage = ({
     setIsSaving(true);
     try {
       const saved = isEditMode
-        ? await updateAdminElection(initialElection.id, form)
+        ? await updateAdminElection(editElectionId as string, form)
         : await createAdminElection(form);
 
       showToast(isEditMode ? 'تم تحديث بيانات الانتخاب بنجاح.' : 'تم إنشاء الانتخاب بنجاح.', 'success');
@@ -167,16 +210,16 @@ export const CreateElectionPage = ({
   };
 
   const handleDelete = async () => {
-    if (!isEditMode || !canManageElectionData) return;
+    if (!isEditMode || !editElectionId || !canManageElectionData) return;
 
     const confirmed = window.confirm(
-      `سيتم حذف الانتخاب "${initialElection.title}" وكل البيانات المرتبطة به من قاعدة البيانات.\n\nهل تريد المتابعة؟`,
+      `سيتم حذف الانتخاب "${loadedElection?.title || form.title}" وكل البيانات المرتبطة به من قاعدة البيانات.\n\nهل تريد المتابعة؟`,
     );
     if (!confirmed) return;
 
     setIsDeleting(true);
     try {
-      await deleteAdminElection(initialElection.id);
+      await deleteAdminElection(editElectionId);
       showToast('تم حذف الانتخاب بنجاح.', 'success');
       await onDeleted?.();
     } catch (error) {
@@ -205,6 +248,13 @@ export const CreateElectionPage = ({
           <span className="mx-1">`super_admin`</span>
           أو
           <span className="mx-1">`election_admin`</span>.
+        </div>
+      )}
+
+      {isLoadingElection && (
+        <div className="flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white p-4 text-sm font-bold text-slate-600">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          <span>جارٍ تحميل بيانات الانتخاب للتعديل...</span>
         </div>
       )}
 
@@ -430,7 +480,7 @@ export const CreateElectionPage = ({
           <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
             <button
               onClick={submit}
-              disabled={!canManageElectionData || isSaving || isDeleting}
+              disabled={!canManageElectionData || isLoadingElection || isSaving || isDeleting}
               className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-60"
             >
               {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
@@ -440,7 +490,7 @@ export const CreateElectionPage = ({
             {isEditMode && (
               <button
                 onClick={handleDelete}
-                disabled={!canManageElectionData || isSaving || isDeleting}
+                disabled={!canManageElectionData || isLoadingElection || isSaving || isDeleting}
                 className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700 hover:bg-rose-100 disabled:opacity-60"
               >
                 {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}

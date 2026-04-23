@@ -217,6 +217,52 @@
   opacity: 0.34;
 }
 
+:root[data-theme='dark'] .app-sidebar {
+  background:
+    linear-gradient(180deg, rgba(24, 31, 28, 0.98), color-mix(in srgb, var(--app-bg-elevated) 92%, #0b0f0e)),
+    var(--app-bg-elevated);
+  border-color: var(--app-border-soft);
+  box-shadow: -16px 0 42px rgba(0, 0, 0, 0.28);
+}
+
+:root[data-theme='dark'][dir='ltr'] .app-sidebar,
+:root[data-theme='dark'] [dir='ltr'] .app-sidebar {
+  box-shadow: 16px 0 42px rgba(0, 0, 0, 0.28);
+}
+
+:root[data-theme='dark'] .app-brand-card {
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--app-primary) 12%, transparent), transparent 62%),
+    color-mix(in srgb, var(--app-bg-elevated) 92%, #0b0f0e);
+  border-color: var(--app-border-soft) !important;
+}
+
+:root[data-theme='dark'] .app-user-card {
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--app-primary) 12%, transparent), transparent 62%),
+    var(--app-bg-soft) !important;
+  border-color: var(--app-border-soft) !important;
+}
+
+:root[data-theme='dark'] .sidebar-nav-item:not(.sidebar-nav-item-active) {
+  color: var(--app-text-muted) !important;
+}
+
+:root[data-theme='dark'] .sidebar-nav-item:not(.sidebar-nav-item-active):hover {
+  background-color: color-mix(in srgb, var(--app-primary) 14%, var(--app-bg-soft)) !important;
+  border-color: color-mix(in srgb, var(--app-primary) 22%, transparent);
+  color: var(--app-text) !important;
+}
+
+:root[data-theme='dark'] .app-sidebar .bg-rose-50 {
+  background-color: color-mix(in srgb, #f43f5e 13%, var(--app-bg-soft)) !important;
+  border-color: color-mix(in srgb, #f43f5e 24%, transparent) !important;
+}
+
+:root[data-theme='dark'] .app-sidebar .text-rose-700 {
+  color: #fda4af !important;
+}
+
 .app-brand-card {
   min-height: 4.6rem;
 }

@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
 import {
   completeSanadLogin,
+  loginAdmin,
   loginAdminWithGoogle,
   loginByEmailPassword,
   loginWithGoogle,
@@ -40,6 +41,24 @@ export async function postLogin(req: Request, res: Response) {
   }
 
   const result = await loginByEmailPassword(email.trim().toLowerCase(), password);
+  res.json({ success: true, data: result });
+}
+
+export async function postAdminLogin(req: Request, res: Response) {
+  const { email, password } = req.body || {};
+  if (!email || !password) {
+    return res.status(400).json({ success: false, message: 'Email and password are required' });
+  }
+
+  if (typeof email !== 'string' || !emailPattern.test(email.trim().toLowerCase())) {
+    return res.status(400).json({ success: false, message: 'Enter a valid email address' });
+  }
+
+  if (typeof password !== 'string' || !password.trim()) {
+    return res.status(400).json({ success: false, message: 'Password is required' });
+  }
+
+  const result = await loginAdmin(email.trim().toLowerCase(), password);
   res.json({ success: true, data: result });
 }
 

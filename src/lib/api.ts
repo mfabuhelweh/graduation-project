@@ -94,6 +94,28 @@ export interface RegisterPayload {
   phoneNumber?: string;
 }
 
+export interface AdminVoterRecord {
+  id: string;
+  electionId?: string;
+  electionTitle?: string;
+  districtId?: string;
+  districtName?: string;
+  governorateName?: string;
+  districtCode?: string;
+  fullName: string;
+  nationalId: string;
+  gender?: 'male' | 'female';
+  birthDate?: string;
+  age?: number;
+  phoneNumber?: string;
+  email?: string;
+  hasVoted?: boolean;
+  verifiedFace?: boolean;
+  status?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface SanadStartPayload {
   nationalId: string;
   password: string;
@@ -324,6 +346,11 @@ export async function fetchDashboardSummary() {
   return response.data;
 }
 
+export async function fetchVoters() {
+  const response = await request<ApiResponse<AdminVoterRecord[]>>('/voters');
+  return response.data;
+}
+
 export async function fetchAuditLogs() {
   const response = await request<ApiResponse<any[]>>('/audit');
   return response.data;
@@ -370,6 +397,24 @@ export async function loginAdminWithGoogleCredential(credential: string) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ credential }),
+  });
+  const body = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(body?.message || `API request failed with status ${response.status}`);
+  }
+
+  if (body?.data?.token) {
+    storeAuthToken(body.data.token);
+  }
+
+  return body.data;
+}
+
+export async function loginAdminWithBackend(email: string, password: string) {
+  const response = await apiFetch('/auth/admin/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
   });
   const body = await response.json().catch(() => null);
   if (!response.ok) {

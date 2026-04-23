@@ -1,8 +1,10 @@
 import * as React from 'react';
-import { ArrowRight, CheckCircle2, Loader2, ShieldAlert, Trash2, TriangleAlert } from 'lucide-react';
+import { Archive, ArrowRight, CheckCircle2, FileDown, Loader2, ShieldAlert, Trash2, TriangleAlert } from 'lucide-react';
 import {
+  deleteAdminElection,
   fetchAdminElectionDetails,
   fetchElectionSetupSummary,
+  fetchResults,
   resetSystemData,
   updateAdminElectionStatus,
 } from '../../lib/api';
@@ -19,7 +21,16 @@ interface ElectionDetailsPageProps {
 const statusActions = [
   { status: 'active', label: 'تفعيل الانتخاب' },
   { status: 'closed', label: 'إغلاق الانتخاب' },
+  { status: 'archived', label: 'أرشفة الانتخاب' },
 ];
+
+function sanitizeFileName(value: string) {
+  return value.replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, ' ').trim().slice(0, 90) || 'election-results';
+}
+
+function toRows(items: any[] = [], mapper: (item: any, index: number) => Record<string, unknown>) {
+  return items.map((item, index) => mapper(item, index));
+}
 
 export const ElectionDetailsPage = ({
   electionId,
@@ -32,6 +43,8 @@ export const ElectionDetailsPage = ({
   const [summary, setSummary] = React.useState<any>(null);
   const [loading, setLoading] = React.useState(true);
   const [statusLoading, setStatusLoading] = React.useState<string | null>(null);
+  const [exportingResults, setExportingResults] = React.useState(false);
+  const [deletingElection, setDeletingElection] = React.useState(false);
   const [resettingSystem, setResettingSystem] = React.useState(false);
 
   const showToast = React.useCallback(
@@ -108,6 +121,134 @@ export const ElectionDetailsPage = ({
     }
   };
 
+  const handleDeleteElection = async () => {
+    if (!canManageElectionData) {
+      showToast('حذف الانتخاب يتطلب صلاحية إدارة الانتخابات.', 'error');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `سيتم حذف الانتخاب "${details?.election?.title || ''}" وكل البيانات المرتبطة به.\n\nهل تريد المتابعة؟`,
+    );
+    if (!confirmed) return;
+
+    setDeletingElection(true);
+    try {
+      await deleteAdminElection(electionId);
+      await onRefreshList();
+      showToast('تم حذف الانتخاب بنجاح.', 'success');
+      onBack();
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'تعذر حذف الانتخاب.', 'error');
+    } finally {
+      setDeletingElection(false);
+    }
+  };
+
+  const handleExportResults = async () => {
+    if (!details?.election?.id) return;
+
+    setExportingResults(true);
+    try {
+      const [XLSX, results] = await Promise.all([import('xlsx'), fetchResults(electionId)]);
+      const workbook = XLSX.utils.book_new();
+      const electionTitle = details.election.title || 'Election';
+
+      XLSX.utils.book_append_sheet(
+        workbook,
+        XLSX.utils.json_to_sheet([
+          {
+            'اسم الانتخاب': electionTitle,
+            'الحالة': details.election.status,
+            'بداية التصويت': details.election.startAt,
+            'نهاية التصويت': details.election.endAt,
+            'إجمالي الأصوات': results.totalVotes || 0,
+            'عدد الدوائر': summary?.counts?.districts || 0,
+            'عدد الأحزاب': summary?.counts?.parties || 0,
+            'عدد القوائم المحلية': summary?.counts?.districtLists || 0,
+            'عدد الناخبين': summary?.counts?.voters || 0,
+          },
+        ]),
+        'Summary',
+      );
+
+      XLSX.utils.book_append_sheet(
+        workbook,
+        XLSX.utils.json_to_sheet(
+          toRows(results.parties || [], (row, index) => ({
+            '#': index + 1,
+            'اسم الحزب': row.name,
+            'رمز الحزب': row.code,
+            'الأصوات': row.votes,
+          })),
+        ),
+        'Party Results',
+      );
+
+      XLSX.utils.book_append_sheet(
+        workbook,
+        XLSX.utils.json_to_sheet(
+          toRows(results.districtLists || [], (row, index) => ({
+            '#': index + 1,
+            'الدائرة': row.districtName,
+            'القائمة المحلية': row.name,
+            'رمز القائمة': row.code,
+            'الأصوات': row.votes,
+          })),
+        ),
+        'Local Lists',
+      );
+
+      XLSX.utils.book_append_sheet(
+        workbook,
+        XLSX.utils.json_to_sheet(
+          toRows(results.districtCandidates || [], (row, index) => ({
+            '#': index + 1,
+            'الدائرة': row.districtName,
+            'القائمة': row.listName,
+            'المرشح': row.name,
+            'الأصوات': row.votes,
+          })),
+        ),
+        'Local Candidates',
+      );
+
+      XLSX.utils.book_append_sheet(
+        workbook,
+        XLSX.utils.json_to_sheet(
+          toRows(results.partyWinners || [], (row, index) => ({
+            '#': index + 1,
+            'المرشح الفائز': row.name,
+            'الحزب': row.partyName,
+            'ترتيب المرشح': row.candidateOrder,
+            'أصوات الحزب': row.partyVotes,
+          })),
+        ),
+        'Party Winners',
+      );
+
+      XLSX.utils.book_append_sheet(
+        workbook,
+        XLSX.utils.json_to_sheet(
+          toRows(results.analytics?.districtTurnout || [], (row) => ({
+            'الدائرة': row.name,
+            'الناخبون المسجلون': row.registeredVoters,
+            'الأصوات': row.votes,
+            'نسبة المشاركة': row.turnout,
+          })),
+        ),
+        'Turnout',
+      );
+
+      XLSX.writeFile(workbook, `${sanitizeFileName(electionTitle)}-results.xlsx`);
+      showToast('تم تصدير النتائج إلى ملف Excel.', 'success');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'تعذر تصدير النتائج.', 'error');
+    } finally {
+      setExportingResults(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex min-h-[320px] items-center justify-center">
@@ -145,11 +286,22 @@ export const ElectionDetailsPage = ({
               key={action.status}
               onClick={() => changeStatus(action.status)}
               disabled={!canManageElectionData || statusLoading === action.status}
-              className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-60"
+              className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold text-white disabled:opacity-60 ${
+                action.status === 'archived' ? 'bg-slate-900 hover:bg-slate-800' : 'bg-blue-600 hover:bg-blue-700'
+              }`}
             >
+              {action.status === 'archived' && statusLoading !== action.status ? <Archive className="h-4 w-4" /> : null}
               {statusLoading === action.status ? 'جارٍ التنفيذ...' : action.label}
             </button>
           ))}
+          <button
+            onClick={handleExportResults}
+            disabled={exportingResults}
+            className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-bold text-emerald-700 hover:bg-emerald-100 disabled:opacity-60"
+          >
+            {exportingResults ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
+            تصدير النتائج Excel
+          </button>
         </div>
       </div>
 
@@ -260,8 +412,16 @@ export const ElectionDetailsPage = ({
               الأدمن حتى لا تنفصلوا عن لوحة التحكم.
             </p>
             <button
+              onClick={handleDeleteElection}
+              disabled={!canManageElectionData || deletingElection || resettingSystem}
+              className="mt-4 ml-2 inline-flex items-center gap-2 rounded-lg border border-rose-200 bg-white px-4 py-2 text-sm font-bold text-rose-700 hover:bg-rose-50 disabled:opacity-60"
+            >
+              {deletingElection ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+              حذف هذا الانتخاب
+            </button>
+            <button
               onClick={handleResetSystem}
-              disabled={!canManageElectionData || resettingSystem}
+              disabled={!canManageElectionData || deletingElection || resettingSystem}
               className="mt-4 inline-flex items-center gap-2 rounded-lg bg-rose-600 px-4 py-2 text-sm font-bold text-white hover:bg-rose-700 disabled:opacity-60"
             >
               {resettingSystem ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}

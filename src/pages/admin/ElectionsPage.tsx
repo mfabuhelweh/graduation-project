@@ -4,6 +4,7 @@ import {
   Eye,
   FileSpreadsheet,
   Pencil,
+  PlusCircle,
   RefreshCw,
   ShieldCheck,
   Users,
@@ -14,6 +15,7 @@ interface ElectionsPageProps {
   elections: any[];
   language: 'ar' | 'en';
   setToast: (toast: any) => void;
+  onCreate: () => void;
   onOpenDetails: (electionId: string) => void;
   onEdit: (electionId: string) => void;
   onRefresh: () => Promise<void>;
@@ -31,6 +33,7 @@ const statusLabels: Record<string, string> = {
 export const ElectionsPage = ({
   elections,
   setToast,
+  onCreate,
   onOpenDetails,
   onEdit,
   onRefresh,
@@ -87,10 +90,9 @@ export const ElectionsPage = ({
     <div className="space-y-6">
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div className="text-right">
-          <h2 className="text-2xl font-black text-slate-900">الانتخابات الثابتة في الموقع</h2>
+          <h2 className="text-2xl font-black text-slate-900">إدارة الانتخابات</h2>
           <p className="mt-2 text-sm leading-7 text-slate-500">
-            هذه الصفحة تعرض فقط انتخابات مجلس النواب الأردني 2024 - الدوائر المحلية. تم توحيد الإدارة
-            والتصويت والنتائج على هذا الانتخاب فقط، بدون قائمة منفصلة للقوائم الحزبية.
+            أنشئ انتخابًا جديدًا من هنا، ثم افتح خيار التفاصيل لإضافة ملفات الدوائر والقوائم والأحزاب والناخبين الخاصة به.
           </p>
           {!canManageElectionData && (
             <div className="mt-3 inline-flex rounded-full border border-amber-100 bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700">
@@ -99,13 +101,25 @@ export const ElectionsPage = ({
           )}
         </div>
 
-        <button
-          onClick={handleRefresh}
-          className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50"
-        >
-          <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-          تحديث
-        </button>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {canManageElectionData && (
+            <button
+              onClick={onCreate}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700"
+            >
+              <PlusCircle className="h-4 w-4" />
+              إنشاء انتخاب جديد
+            </button>
+          )}
+
+          <button
+            onClick={handleRefresh}
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50"
+          >
+            <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+            تحديث
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">

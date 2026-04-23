@@ -12,7 +12,7 @@ async function getVoterDemographicsMetadata() {
      FROM information_schema.columns
      WHERE table_schema = 'public'
        AND table_name = 'voters'
-       AND column_name IN ('gender', 'birth_date', 'date_of_birth')`,
+       AND column_name IN ('gender', 'birth_date', 'date_of_birth', 'age')`,
   );
 
   const availableColumns = new Set(columnsResult.rows.map((row) => row.column_name));
@@ -23,6 +23,7 @@ async function getVoterDemographicsMetadata() {
       : availableColumns.has('date_of_birth')
         ? 'date_of_birth'
         : null,
+    ageColumn: availableColumns.has('age') ? 'age' : null,
   };
 }
 
@@ -314,14 +315,22 @@ export async function getElectionResults(electionId: string, user?: Authenticate
     }));
   }
 
-  if (demographicsMetadata.birthDateColumn) {
+  if (demographicsMetadata.birthDateColumn || demographicsMetadata.ageColumn) {
     const ageGroupsResult = await query<{ key: string; count: number }>(
       `WITH voters_age AS (
-         SELECT EXTRACT(YEAR FROM AGE(CURRENT_DATE, ${demographicsMetadata.birthDateColumn}))::int AS age_years
+         SELECT ${
+           demographicsMetadata.birthDateColumn
+             ? `EXTRACT(YEAR FROM AGE(CURRENT_DATE, ${demographicsMetadata.birthDateColumn}))::int`
+             : `${demographicsMetadata.ageColumn}::int`
+         } AS age_years
          FROM voters
          WHERE election_id = $1
            AND has_voted = true
-           AND ${demographicsMetadata.birthDateColumn} IS NOT NULL
+           AND ${
+             demographicsMetadata.birthDateColumn
+               ? `${demographicsMetadata.birthDateColumn} IS NOT NULL`
+               : `${demographicsMetadata.ageColumn} IS NOT NULL`
+           }
        )
        SELECT CASE
                 WHEN age_years < 18 THEN 'under_18'
@@ -369,7 +378,7 @@ export async function getElectionResults(electionId: string, user?: Authenticate
       })),
       demographics: {
         genderAvailable: demographicsMetadata.hasGender,
-        ageAvailable: Boolean(demographicsMetadata.birthDateColumn),
+        ageAvailable: Boolean(demographicsMetadata.birthDateColumn || demographicsMetadata.ageColumn),
         genderBreakdown,
         ageGroups,
       },

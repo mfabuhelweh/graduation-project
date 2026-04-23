@@ -23,10 +23,14 @@ import { SiteHeader } from '../components/layout/SiteHeader';
 
 interface LoginPageProps {
   onSanadComplete: (challengeId: string) => Promise<void>;
+  onAdminPasswordLogin: (email: string, password: string) => Promise<void>;
   onAdminGoogleLogin: (credential: string) => Promise<void>;
   isLoading: boolean;
   error: string | null;
   language?: 'ar' | 'en';
+  theme?: 'light' | 'dark';
+  onToggleTheme?: () => void;
+  adminOnly?: boolean;
 }
 
 type LandingSectionId = 'home' | 'about' | 'features' | 'faq' | 'contact' | 'privacy' | 'terms' | 'help';
@@ -69,10 +73,14 @@ function GoogleMark() {
 
 export const LoginPage = ({
   onSanadComplete,
+  onAdminPasswordLogin,
   onAdminGoogleLogin,
   isLoading,
   error,
   language = 'ar',
+  theme = 'light',
+  onToggleTheme,
+  adminOnly = false,
 }: LoginPageProps) => {
   const voterAppOnly = Capacitor.isNativePlatform();
   const isArabic = language === 'ar';
@@ -85,12 +93,16 @@ export const LoginPage = ({
     section.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, []);
 
-  const [mode, setMode] = React.useState<'sanad' | 'admin'>('sanad');
-  const [showLoginPanel, setShowLoginPanel] = React.useState(voterAppOnly);
+  const [mode, setMode] = React.useState<'sanad' | 'admin'>(adminOnly ? 'admin' : 'sanad');
+  const [showLoginPanel, setShowLoginPanel] = React.useState(voterAppOnly || adminOnly);
   const [localError, setLocalError] = React.useState<string | null>(null);
   const [formMessage, setFormMessage] = React.useState<string | null>(null);
   const [sanadLoading, setSanadLoading] = React.useState(false);
   const [isGoogleReady, setIsGoogleReady] = React.useState(false);
+  const [adminForm, setAdminForm] = React.useState({
+    email: '',
+    password: '',
+  });
 
   const [sanadForm, setSanadForm] = React.useState({
     nationalId: '',
@@ -110,8 +122,9 @@ export const LoginPage = ({
   const googleInitializedRef = React.useRef(false);
 
   React.useEffect(() => {
-    if (voterAppOnly) setShowLoginPanel(true);
-  }, [voterAppOnly]);
+    if (voterAppOnly || adminOnly) setShowLoginPanel(true);
+    if (adminOnly) setMode('admin');
+  }, [adminOnly, voterAppOnly]);
 
   const clearMessages = React.useCallback(() => {
     setLocalError(null);
@@ -282,6 +295,28 @@ export const LoginPage = ({
       );
     } finally {
       setSanadLoading(false);
+    }
+  };
+
+  const handleAdminPasswordSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const email = adminForm.email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setLocalError(t('أدخل بريد الأدمن بشكل صحيح.', 'Enter a valid admin email address.'));
+      return;
+    }
+
+    if (!adminForm.password.trim()) {
+      setLocalError(t('أدخل كلمة سر الأدمن.', 'Enter the admin password.'));
+      return;
+    }
+
+    clearMessages();
+    try {
+      await onAdminPasswordLogin(email, adminForm.password);
+    } catch {
+      // parent handles backend error
     }
   };
 
@@ -470,55 +505,99 @@ export const LoginPage = ({
 
             <div className="text-right">
               <h2 className="text-base font-black text-slate-900">
-                {t('تسجيل دخول الأدمن عبر Google', 'Admin sign in with Google')}
+                {t('تسجيل دخول الأدمن', 'Admin sign in')}
               </h2>
               <p className="mt-1 text-sm leading-6 text-slate-500">
                 {t(
-                  'يتم السماح فقط للحسابات الموجودة في admins. بعد التحقق يصدر النظام JWT بصلاحية admin.',
-                  'Only accounts listed in admins are allowed. After verification, the system issues an admin JWT session.',
+                  'هذا الرابط مخصص لمسؤولي النظام فقط. استخدم البريد وكلمة السر أو حساب Google مفوض.',
+                  'This route is only for system administrators. Use email and password or an authorized Google account.',
                 )}
               </p>
             </div>
           </div>
 
+          <form className="mt-5 space-y-4" onSubmit={handleAdminPasswordSubmit}>
+            <div>
+              <label className="mb-2 block text-right text-sm font-bold text-slate-700">
+                {t('البريد الإلكتروني', 'Email address')}
+              </label>
+              <input
+                type="email"
+                value={adminForm.email}
+                onChange={(event) => {
+                  setAdminForm((current) => ({ ...current, email: event.target.value }));
+                  clearMessages();
+                }}
+                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-left text-base text-slate-900 outline-none transition focus:border-slate-900"
+                dir="ltr"
+                autoComplete="email"
+                placeholder="admin@example.com"
+              />
+            </div>
+
+            <div>
+              <label className="mb-2 block text-right text-sm font-bold text-slate-700">
+                {t('كلمة السر', 'Password')}
+              </label>
+              <input
+                type="password"
+                value={adminForm.password}
+                onChange={(event) => {
+                  setAdminForm((current) => ({ ...current, password: event.target.value }));
+                  clearMessages();
+                }}
+                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-right text-base text-slate-900 outline-none transition focus:border-slate-900"
+                dir={isArabic ? 'rtl' : 'ltr'}
+                autoComplete="current-password"
+                placeholder={t('أدخل كلمة السر', 'Enter password')}
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="flex min-h-12 w-full touch-manipulation items-center justify-center gap-3 rounded-2xl bg-slate-900 px-5 py-4 text-base font-black text-white transition hover:bg-slate-800 active:opacity-90 disabled:opacity-60"
+            >
+              {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <LockKeyhole className="h-5 w-5" />}
+              <span>{t('دخول الأدمن', 'Sign in as admin')}</span>
+            </button>
+          </form>
+
+          <div className="my-5 flex items-center gap-3 text-xs font-black text-slate-400">
+            <div className="h-px flex-1 bg-slate-200" />
+            <span>{t('أو', 'OR')}</span>
+            <div className="h-px flex-1 bg-slate-200" />
+          </div>
+
           {!googleClientId ? (
-            <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-right text-sm text-amber-800">
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-right text-sm text-amber-800">
               {t(
                 'لم يتم ضبط VITE_GOOGLE_CLIENT_ID بعد. أضفه إلى ملف البيئة لتفعيل دخول الأدمن عبر Google.',
                 'VITE_GOOGLE_CLIENT_ID is not configured yet. Add it to your environment file to enable admin Google sign-in.',
               )}
             </div>
           ) : (
-            <div className="mt-5 space-y-4">
-              <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4">
-                <div className="mb-3 flex items-center justify-end gap-2 text-sm font-bold text-slate-700">
-                  <span>{t('الحساب المفوض', 'Authorized account')}</span>
-                  <GoogleMark />
-                </div>
-
-                <div className="relative">
-                  <div
-                    ref={adminGoogleButtonRef}
-                    className={`mx-auto flex min-h-11 max-w-[320px] items-center justify-center ${
-                      isLoading ? 'pointer-events-none opacity-50' : ''
-                    }`}
-                  />
-
-                  {!isGoogleReady && (
-                    <div className="flex min-h-11 items-center justify-center gap-2 text-sm font-medium text-slate-500">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      <span>{t('جارٍ تحميل Google Sign-In...', 'Loading Google Sign-In...')}</span>
-                    </div>
-                  )}
-                </div>
+            <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4">
+              <div className="mb-3 flex items-center justify-end gap-2 text-sm font-bold text-slate-700">
+                <span>{t('الدخول عبر Google', 'Continue with Google')}</span>
+                <GoogleMark />
               </div>
 
-              <p className="text-right text-xs leading-6 text-slate-500">
-                {t(
-                  'إذا لم يكن الإيميل موجوداً في جدول admins داخل الباك إند فسيتم رفض الدخول حتى لو نجح تسجيل Google.',
-                  'If the email is not present in the backend admins table, access will be denied even if Google sign-in succeeds.',
+              <div className="relative">
+                <div
+                  ref={adminGoogleButtonRef}
+                  className={`mx-auto flex min-h-11 max-w-[320px] items-center justify-center ${
+                    isLoading ? 'pointer-events-none opacity-50' : ''
+                  }`}
+                />
+
+                {!isGoogleReady && (
+                  <div className="flex min-h-11 items-center justify-center gap-2 text-sm font-medium text-slate-500">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>{t('جارٍ تحميل Google Sign-In...', 'Loading Google Sign-In...')}</span>
+                  </div>
                 )}
-              </p>
+              </div>
             </div>
           )}
         </div>
@@ -703,7 +782,7 @@ export const LoginPage = ({
 
   const loginPanel = (
     <div className="app-panel login-card mx-auto w-full max-w-md rounded-[28px] px-6 py-8 sm:px-8">
-      {!voterAppOnly && (
+      {!voterAppOnly && !adminOnly && (
         <div className="mb-5 flex items-center justify-between gap-3">
           <button
             type="button"
@@ -723,46 +802,18 @@ export const LoginPage = ({
 
       <SanadLogo />
 
-      {voterAppOnly ? (
+      {adminOnly ? (
+        <p className="mt-4 text-center text-sm font-bold text-slate-600">
+          {t('بوابة إدارة النظام', 'System administration portal')}
+        </p>
+      ) : voterAppOnly ? (
         <p className="mt-4 text-center text-sm font-bold text-slate-600">
           {t(
             'تطبيق الناخب - سجّل الدخول عبر سند. إدارة النظام متاحة من الموقع على المتصفح.',
             'Voter app - Sign in via SANAD. Admin management is available on the website.',
           )}
         </p>
-      ) : (
-        <div className="mt-6 flex justify-center">
-          <div className="inline-flex rounded-lg bg-slate-100 p-1">
-            <button
-              type="button"
-              onClick={() => {
-                setShowLoginPanel(true);
-                setMode('sanad');
-                clearMessages();
-              }}
-              className={`min-h-11 touch-manipulation rounded-lg px-4 py-3 text-sm font-black transition active:opacity-90 sm:px-5 ${
-                mode === 'sanad' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600'
-              }`}
-            >
-              {t('الدخول عبر صوتك', 'Sign in with Soutak')}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setShowLoginPanel(true);
-                setMode('admin');
-                clearMessages();
-              }}
-              className={`min-h-11 touch-manipulation rounded-lg px-4 py-3 text-sm font-black transition active:opacity-90 sm:px-5 ${
-                mode === 'admin' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-600'
-              }`}
-            >
-              {t('دخول الأدمن', 'Admin sign in')}
-            </button>
-          </div>
-        </div>
-      )}
+      ) : null}
 
       <div className="mt-8 rounded-lg border border-slate-200 bg-slate-50 p-5 sm:p-6">
         <div className="mb-6 text-center">
@@ -773,10 +824,15 @@ export const LoginPage = ({
           </h1>
 
           <p className="mt-2 text-sm leading-7 text-slate-500">
-            {voterAppOnly || mode === 'sanad'
+            {adminOnly
               ? t(
-                  'الدخول إلى النظام يتم افتراضياً عبر سند للتحقق من الهوية بشكل آمن ومباشر.',
-                  'By default, sign in is done using SANAD for secure identity verification.',
+                  'أدخل بيانات الأدمن للوصول إلى لوحة التحكم، أو استخدم حساب Google مفوض.',
+                  'Enter admin credentials to access the dashboard, or use an authorized Google account.',
+                )
+              : voterAppOnly || mode === 'sanad'
+                ? t(
+                    'الدخول إلى النظام يتم افتراضياً عبر سند للتحقق من الهوية بشكل آمن ومباشر.',
+                    'By default, sign in is done using SANAD for secure identity verification.',
                 )
               : t(
                   'هذا المدخل مخصص فقط لمسؤولي النظام عبر حساب Google مفوض وموجود مسبقاً في جدول admins.',
@@ -809,9 +865,15 @@ export const LoginPage = ({
       dir={isArabic ? 'rtl' : 'ltr'}
     >
       <div className="w-full">
-        {!voterAppOnly ? (
+        {!voterAppOnly && !adminOnly ? (
           <div className="mx-auto flex min-h-dvh max-w-7xl flex-col">
-            <SiteHeader language={language} onUserActionClick={resetToSanad} navItems={headerNavItems} />
+            <SiteHeader
+              language={language}
+              theme={theme}
+              onToggleTheme={onToggleTheme}
+              onUserActionClick={resetToSanad}
+              navItems={headerNavItems}
+            />
 
             <section
               id="home"

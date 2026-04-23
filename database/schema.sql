@@ -51,10 +51,14 @@ CREATE TABLE districts (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   election_id uuid NOT NULL REFERENCES elections(id) ON UPDATE CASCADE ON DELETE CASCADE,
   name text NOT NULL,
+  governorate_name text,
   code text NOT NULL,
   seats_count integer NOT NULL DEFAULT 1,
   created_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT districts_name_not_blank CHECK (length(trim(name)) > 0),
+  CONSTRAINT districts_governorate_name_not_blank CHECK (
+    governorate_name IS NULL OR length(trim(governorate_name)) > 0
+  ),
   CONSTRAINT districts_code_not_blank CHECK (length(trim(code)) > 0),
   CONSTRAINT districts_seats_positive CHECK (seats_count > 0),
   CONSTRAINT districts_code_unique_per_election UNIQUE (election_id, code)
@@ -166,6 +170,7 @@ CREATE TABLE voters (
   national_id text NOT NULL,
   gender candidate_gender,
   birth_date date,
+  age integer,
   phone_number text,
   email citext,
   google_sub text,
@@ -179,6 +184,7 @@ CREATE TABLE voters (
   updated_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT voters_full_name_not_blank CHECK (length(trim(full_name)) > 0),
   CONSTRAINT voters_national_id_format CHECK (national_id ~ '^[0-9]{10}$'),
+  CONSTRAINT voters_age_range CHECK (age IS NULL OR (age >= 0 AND age <= 120)),
   CONSTRAINT voters_unique_national_id_per_election UNIQUE (election_id, national_id)
 );
 
@@ -345,6 +351,7 @@ CREATE INDEX idx_voters_election_id ON voters (election_id);
 CREATE INDEX idx_voters_district_id ON voters (district_id);
 CREATE INDEX idx_voters_gender ON voters (gender);
 CREATE INDEX idx_voters_birth_date ON voters (birth_date);
+CREATE INDEX idx_voters_age ON voters (age);
 CREATE INDEX idx_voters_status ON voters (status);
 CREATE UNIQUE INDEX uq_voters_email ON voters (email) WHERE email IS NOT NULL;
 CREATE UNIQUE INDEX uq_voters_google_sub ON voters (google_sub) WHERE google_sub IS NOT NULL;
@@ -370,6 +377,7 @@ CREATE INDEX idx_district_list_candidates_national_id ON district_list_candidate
 
 CREATE INDEX idx_elections_status_time ON elections (status, start_at, end_at);
 CREATE INDEX idx_districts_election_id ON districts (election_id);
+CREATE INDEX idx_districts_governorate_name ON districts (governorate_name);
 CREATE INDEX idx_quotas_election_id ON quotas (election_id);
 CREATE INDEX idx_quotas_district_id ON quotas (district_id);
 
@@ -425,6 +433,17 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+CREATE OR REPLACE FUNCTION sync_voter_age()
+RETURNS trigger AS $$
+BEGIN
+  IF NEW.birth_date IS NOT NULL THEN
+    NEW.age = EXTRACT(YEAR FROM AGE(CURRENT_DATE, NEW.birth_date))::int;
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
 CREATE TRIGGER trg_admins_updated_at
 BEFORE UPDATE ON admins
 FOR EACH ROW EXECUTE FUNCTION set_updated_at();
@@ -456,6 +475,10 @@ FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 CREATE TRIGGER trg_voters_updated_at
 BEFORE UPDATE ON voters
 FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE TRIGGER trg_voters_sync_age
+BEFORE INSERT OR UPDATE OF birth_date, age ON voters
+FOR EACH ROW EXECUTE FUNCTION sync_voter_age();
 
 CREATE TRIGGER trg_sanad_auth_requests_updated_at
 BEFORE UPDATE ON sanad_auth_requests

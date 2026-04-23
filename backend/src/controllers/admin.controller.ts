@@ -12,13 +12,13 @@ import {
   deleteElection,
   getElectionDetails,
   getElectionSetupSummary,
-  listElections,
+  listAdminElections,
   updateElection,
   updateElectionStatus,
 } from '../services/election.service.js';
 
 export async function getAdminElections(_req: Request, res: Response) {
-  res.json({ success: true, data: await listElections() });
+  res.json({ success: true, data: await listAdminElections() });
 }
 
 export async function postAdminElection(req: Request, res: Response) {

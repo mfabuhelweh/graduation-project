@@ -5,6 +5,7 @@ export interface Voter {
   fullName: string;
   gender?: 'male' | 'female';
   birthDate?: string;
+  age?: number;
   phoneNumber?: string;
   districtId?: string;
   email?: string;

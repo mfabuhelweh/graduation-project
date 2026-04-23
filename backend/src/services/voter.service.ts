@@ -12,6 +12,85 @@ import { createDefaultVoterPasswordHash } from '../utils/password.js';
 
 const collection = adminDb.collection('voters');
 
+function deriveAgeFromBirthDate(value?: string | Date | null) {
+  if (!value) return undefined;
+  const birthDate = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(birthDate.getTime())) return undefined;
+
+  const today = new Date();
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const monthDiff = today.getMonth() - birthDate.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+    age -= 1;
+  }
+
+  return age >= 0 ? age : undefined;
+}
+
+function normalizeAge(age?: number | string | null, birthDate?: string | Date | null) {
+  const derivedAge = deriveAgeFromBirthDate(birthDate);
+  if (typeof derivedAge === 'number') return derivedAge;
+
+  const parsedAge = Number(age);
+  if (Number.isFinite(parsedAge) && parsedAge >= 0) {
+    return parsedAge;
+  }
+
+  return undefined;
+}
+
+function generateRandomGender() {
+  return Math.random() < 0.5 ? 'male' : 'female';
+}
+
+function generateRandomAdultAge() {
+  return Math.floor(Math.random() * 43) + 19;
+}
+
+function resolveStoredGender(gender?: string | null) {
+  return gender === 'male' || gender === 'female' ? gender : generateRandomGender();
+}
+
+function resolveStoredAge(age?: number | string | null, birthDate?: string | Date | null) {
+  const normalizedAge = normalizeAge(age, birthDate);
+  if (typeof normalizedAge === 'number' && normalizedAge >= 18) {
+    return normalizedAge;
+  }
+
+  return generateRandomAdultAge();
+}
+
+function deriveGovernorateName(
+  governorateName?: string | null,
+  districtName?: string | null,
+  districtCode?: string | null,
+) {
+  const explicitGovernorate = String(governorateName ?? '').trim();
+  if (explicitGovernorate) return explicitGovernorate;
+
+  const district = String(districtName ?? '').trim();
+  const code = String(districtCode ?? '').trim().toUpperCase();
+  const searchable = `${district} ${code}`.toLowerCase();
+
+  if (code.startsWith('AMM') || district.includes('العاصمة') || searchable.includes('amman')) return 'عمان';
+  if (code.startsWith('IRB') || district.includes('إربد') || district.includes('اربد') || searchable.includes('irbid')) return 'إربد';
+  if (code.startsWith('ZAR') || district.includes('الزرقاء') || searchable.includes('zarqa')) return 'الزرقاء';
+  if (code.startsWith('BAL') || district.includes('البلقاء') || searchable.includes('balqa')) return 'البلقاء';
+  if (code.startsWith('KAR') || district.includes('الكرك') || searchable.includes('karak')) return 'الكرك';
+  if (code.startsWith('MAA') || district.includes('معان') || searchable.includes("ma'an") || searchable.includes('maan')) return 'معان';
+  if (code.startsWith('TAF') || district.includes('الطفيلة') || searchable.includes('tafila')) return 'الطفيلة';
+  if (code.startsWith('JER') || district.includes('جرش') || searchable.includes('jerash')) return 'جرش';
+  if (code.startsWith('AJL') || district.includes('عجلون') || searchable.includes('ajloun')) return 'عجلون';
+  if (code.startsWith('MAD') || district.includes('مادبا') || searchable.includes('madaba')) return 'مادبا';
+  if (code.startsWith('AQA') || district.includes('العقبة') || searchable.includes('aqaba')) return 'العقبة';
+  if (code.startsWith('MAF') || district.includes('المفرق') || searchable.includes('mafraq')) return 'المفرق';
+  if (code === 'BADIA_NORTH' || district.includes('البادية الشمالية') || searchable.includes('badia north')) return 'البادية الشمالية';
+  if (code === 'BADIA_CENTER' || district.includes('البادية الوسطى') || searchable.includes('badia center') || searchable.includes('badia central')) return 'البادية الوسطى';
+  if (code === 'BADIA_SOUTH' || district.includes('البادية الجنوبية') || searchable.includes('badia south')) return 'البادية الجنوبية';
+
+  return district || undefined;
+}
+
 function mapVoterRow(row: any) {
   return {
     id: row.id,
@@ -21,6 +100,7 @@ function mapVoterRow(row: any) {
     nationalId: row.national_id,
     gender: row.gender || undefined,
     birthDate: row.birth_date || undefined,
+    age: normalizeAge(row.age, row.birth_date),
     phoneNumber: row.phone_number,
     email: row.email,
     idCardImageUrl: row.id_card_image_url,
@@ -28,6 +108,10 @@ function mapVoterRow(row: any) {
     hasVoted: row.has_voted,
     verifiedFace: row.verified_face,
     status: row.status,
+    districtName: row.district_name || undefined,
+    governorateName: deriveGovernorateName(row.governorate_name, row.district_name, row.district_code),
+    districtCode: row.district_code || undefined,
+    electionTitle: row.election_title || undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -35,18 +119,46 @@ function mapVoterRow(row: any) {
 
 export async function listVoters() {
   if (env.enableMemoryStore) {
-    return Array.from(memoryStore.voters.values()).sort((a, b) =>
-      String(b.createdAt).localeCompare(String(a.createdAt)),
-    );
+    return Array.from(memoryStore.voters.values())
+      .map((voter: any) => {
+        const district = voter.districtId ? memoryStore.districts.get(voter.districtId) : null;
+        const election = voter.electionId ? memoryStore.elections.get(voter.electionId) : null;
+        return {
+          ...voter,
+          age: normalizeAge(voter.age, voter.birthDate),
+          districtName: district?.name,
+          governorateName: deriveGovernorateName((district as any)?.governorateName, district?.name, district?.code),
+          districtCode: district?.code,
+          electionTitle: election?.title,
+        };
+      })
+      .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
   }
 
   if (usePostgres) {
-    const result = await query('SELECT * FROM voters ORDER BY created_at DESC');
+    const result = await query(
+      `SELECT v.*,
+              d.name AS district_name,
+              d.governorate_name,
+              d.code AS district_code,
+              e.title AS election_title
+       FROM voters v
+       JOIN districts d ON d.id = v.district_id
+       JOIN elections e ON e.id = v.election_id
+       ORDER BY v.created_at DESC`,
+    );
     return result.rows.map(mapVoterRow);
   }
 
   const snapshot = await collection.orderBy('createdAt', 'desc').get();
-  return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+  return snapshot.docs.map((doc) => {
+    const data = doc.data();
+    return {
+      id: doc.id,
+      ...data,
+      age: normalizeAge((data as any).age, (data as any).birthDate),
+    };
+  });
 }
 
 export async function getVoterByNationalId(nationalId: string, electionId?: string) {
@@ -100,6 +212,7 @@ export async function getCurrentVoterProfile(authenticatedUser: AuthenticatedUse
       uid: authenticatedUser.uid,
       electionTitle: undefined,
       districtName: undefined,
+      governorateName: undefined,
       districtCode: undefined
     };
   }
@@ -107,6 +220,7 @@ export async function getCurrentVoterProfile(authenticatedUser: AuthenticatedUse
   const result = await query(
     `SELECT v.*,
             d.name AS district_name,
+            d.governorate_name,
             d.code AS district_code,
             e.title AS election_title
      FROM voters v
@@ -118,7 +232,7 @@ export async function getCurrentVoterProfile(authenticatedUser: AuthenticatedUse
     [authenticatedUser.electionId, authenticatedUser.nationalId]
   );
 
-  const row = result.rows[0];
+  const row = result.rows[0] as any;
   if (!row) return null;
 
   return {
@@ -127,6 +241,7 @@ export async function getCurrentVoterProfile(authenticatedUser: AuthenticatedUse
     role: "voter",
     email: row.email || authenticatedUser.email || "",
     districtName: row.district_name,
+    governorateName: deriveGovernorateName(row.governorate_name, row.district_name, row.district_code),
     districtCode: row.district_code,
     electionTitle: row.election_title
   };
@@ -141,7 +256,15 @@ export async function createVoter(data: Voter, actor = 'system') {
   if (env.enableMemoryStore) {
     const id = createId('voter');
     const now = new Date().toISOString();
-    const voter = { ...data, id, hasVoted: data.hasVoted ?? false, createdAt: now, updatedAt: now };
+    const voter = {
+      ...data,
+      id,
+      gender: resolveStoredGender((data as any).gender),
+      age: resolveStoredAge((data as any).age, (data as any).birthDate),
+      hasVoted: data.hasVoted ?? false,
+      createdAt: now,
+      updatedAt: now,
+    };
     memoryStore.voters.set(id, voter);
     await addAuditLog('voter.created', actor, `Created voter ${data.nationalId}`);
     return voter;
@@ -156,18 +279,19 @@ export async function createVoter(data: Voter, actor = 'system') {
 
     const result = await query(
       `INSERT INTO voters (
-         election_id, district_id, full_name, national_id, gender, birth_date, phone_number, email,
+         election_id, district_id, full_name, national_id, gender, birth_date, age, phone_number, email,
          password_hash, id_card_image_url, face_template_hash, has_voted, verified_face, status
        )
-       VALUES ($1, $2, $3, $4, $5::candidate_gender, $6::date, $7, $8, $9, $10, $11, COALESCE($12, false), COALESCE($13, false), COALESCE($14::voter_status, 'eligible'))
+       VALUES ($1, $2, $3, $4, $5::candidate_gender, $6::date, $7, $8, $9, $10, $11, $12, COALESCE($13, false), COALESCE($14, false), COALESCE($15::voter_status, 'eligible'))
        RETURNING *`,
       [
         data.electionId,
         data.districtId,
         data.fullName,
         data.nationalId,
-        (data as any).gender || null,
+        resolveStoredGender((data as any).gender),
         (data as any).birthDate || null,
+        resolveStoredAge((data as any).age, (data as any).birthDate),
         (data as any).phoneNumber || null,
         (data as any).email || null,
         defaultPasswordHash,
@@ -186,6 +310,8 @@ export async function createVoter(data: Voter, actor = 'system') {
   const now = Timestamp.now();
   const docRef = await collection.add({
     ...data,
+    gender: resolveStoredGender((data as any).gender),
+    age: resolveStoredAge((data as any).age, (data as any).birthDate),
     hasVoted: data.hasVoted ?? false,
     createdAt: now,
     updatedAt: now,
@@ -212,13 +338,14 @@ export async function updateVoter(id: string, data: Partial<Voter>, actor = 'sys
            national_id = COALESCE($3, national_id),
            gender = COALESCE($4::candidate_gender, gender),
            birth_date = COALESCE($5::date, birth_date),
-           phone_number = COALESCE($6, phone_number),
-           email = COALESCE($7, email),
-           id_card_image_url = COALESCE($8, id_card_image_url),
-           face_template_hash = COALESCE($9, face_template_hash),
-           has_voted = COALESCE($10, has_voted),
-           verified_face = COALESCE($11, verified_face),
-           status = COALESCE($12::voter_status, status),
+           age = COALESCE($6, age),
+           phone_number = COALESCE($7, phone_number),
+           email = COALESCE($8, email),
+           id_card_image_url = COALESCE($9, id_card_image_url),
+           face_template_hash = COALESCE($10, face_template_hash),
+           has_voted = COALESCE($11, has_voted),
+           verified_face = COALESCE($12, verified_face),
+           status = COALESCE($13::voter_status, status),
            updated_at = now()
        WHERE id = $1
        RETURNING *`,
@@ -228,6 +355,7 @@ export async function updateVoter(id: string, data: Partial<Voter>, actor = 'sys
         data.nationalId || null,
         (data as any).gender || null,
         (data as any).birthDate || null,
+        normalizeAge((data as any).age, (data as any).birthDate) ?? null,
         (data as any).phoneNumber || null,
         (data as any).email || null,
         (data as any).idCardImageUrl || null,
