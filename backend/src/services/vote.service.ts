@@ -40,7 +40,13 @@ function getRawToken(payload: VotePayload) {
   return payload.token || payload.votingToken || payload.biometricToken;
 }
 
-export async function castVote(payload: VotePayload, actorUid?: string) {
+export async function castVote(
+  payload: VotePayload,
+  actorUid?: string,
+  options?: {
+    allowDemoVoting?: boolean;
+  },
+) {
   if (
     !payload.voterNationalId ||
     !payload.partyId ||
@@ -55,7 +61,7 @@ export async function castVote(payload: VotePayload, actorUid?: string) {
   if (!election) {
     throw new Error('Election not found');
   }
-  if (!isElectionActiveForVoting(election as any)) {
+  if (!options?.allowDemoVoting && !isElectionActiveForVoting(election as any)) {
     throw new Error('Election is not active');
   }
   const electionId = (election as any).id;
@@ -175,6 +181,7 @@ export async function castVote(payload: VotePayload, actorUid?: string) {
       throw new Error('Expired token');
     }
     if (
+      !options?.allowDemoVoting &&
       !isElectionActiveForVoting({
         status: tokenRow.election_status,
         startAt: tokenRow.start_at,
