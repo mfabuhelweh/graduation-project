@@ -3,8 +3,8 @@ import { createHash, randomInt } from 'node:crypto';
 import jwt from 'jsonwebtoken';
 import { OAuth2Client } from 'google-auth-library';
 import { env } from '../config/env.js';
-import { LOCAL_SYSTEM_ELECTION_TITLE } from '../constants/systemElections.js';
 import { query, withTransaction } from '../db/pool.js';
+import { createDefaultVoterPasswordHash, hashPassword } from '../utils/password.js';
 
 export interface AuthTokenPayload {
   sub: string;
@@ -172,17 +172,24 @@ async function findVoterForSanad(nationalId: string) {
      FROM voters v
      JOIN elections e ON e.id = v.election_id
      WHERE v.national_id = $1
-       AND e.title = $2
      ORDER BY
        CASE e.status
          WHEN 'active' THEN 0
          WHEN 'scheduled' THEN 1
-         ELSE 2
+         WHEN 'draft' THEN 2
+         WHEN 'closed' THEN 3
+         ELSE 4
        END,
+       CASE
+         WHEN e.start_at IS NULL THEN 1
+         WHEN e.start_at <= now() THEN 0
+         ELSE 1
+       END,
+       e.start_at ASC NULLS LAST,
        e.created_at DESC,
        v.created_at DESC
      LIMIT 1`,
-    [nationalId, LOCAL_SYSTEM_ELECTION_TITLE],
+    [nationalId],
   );
 
   return result.rows[0] || null;
@@ -247,7 +254,7 @@ export async function loginByEmailPassword(email: string, password: string) {
 }
 
 export async function registerVoterAccount(input: RegisterVoterInput) {
-  const passwordHash = await bcrypt.hash(input.password, 10);
+  const passwordHash = await hashPassword(input.password);
 
   const voter = await withTransaction(async (client) => {
     const adminConflict = await client.query<{ id: string }>(
@@ -428,10 +435,34 @@ export async function loginAdminWithGoogle(credential: string) {
   return buildAdminAuthResult(adminByEmail);
 }
 
-export async function startSanadLogin(nationalId: string) {
+export async function startSanadLogin(
+  nationalId: string,
+  password: string,
+  options?: {
+    includeSandboxOtp?: boolean;
+  },
+) {
   const voter = await findVoterForSanad(nationalId);
   if (!voter) {
     throw new Error('Voter is not registered');
+  }
+
+  if (!voter.password_hash) {
+    const defaultPasswordHash = await createDefaultVoterPasswordHash();
+    const updated = await query<VoterRow>(
+      `UPDATE voters
+       SET password_hash = $2,
+           updated_at = now()
+       WHERE id = $1
+       RETURNING id, email, full_name, national_id, election_id, phone_number, password_hash, google_sub`,
+      [voter.id, defaultPasswordHash],
+    );
+
+    voter.password_hash = updated.rows[0]?.password_hash || defaultPasswordHash;
+  }
+
+  if (!verifyPassword(password, voter.password_hash)) {
+    throw new Error('Invalid national ID or password');
   }
 
   const otp = String(randomInt(100000, 999999));
@@ -480,7 +511,7 @@ export async function startSanadLogin(nationalId: string) {
     expiresAt: challenge.expires_at,
     citizenName: voter.full_name,
     nationalId: voter.national_id,
-    sandboxOtp: env.enableDevAuth ? otp : undefined,
+    sandboxOtp: options?.includeSandboxOtp ? otp : undefined,
   };
 }
 

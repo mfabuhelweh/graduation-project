@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
 import {
   completeSanadLogin,
+  loginAdmin,
   loginAdminWithGoogle,
   loginByEmailPassword,
   loginWithGoogle,
@@ -8,6 +9,7 @@ import {
   startSanadLogin,
   verifySanadOtp,
 } from '../services/auth.service.js';
+import { canUseDemoMode } from '../utils/requestGuards.js';
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const nationalIdPattern = /^[0-9]{10}$/;
@@ -39,6 +41,24 @@ export async function postLogin(req: Request, res: Response) {
   }
 
   const result = await loginByEmailPassword(email.trim().toLowerCase(), password);
+  res.json({ success: true, data: result });
+}
+
+export async function postAdminLogin(req: Request, res: Response) {
+  const { email, password } = req.body || {};
+  if (!email || !password) {
+    return res.status(400).json({ success: false, message: 'Email and password are required' });
+  }
+
+  if (typeof email !== 'string' || !emailPattern.test(email.trim().toLowerCase())) {
+    return res.status(400).json({ success: false, message: 'Enter a valid email address' });
+  }
+
+  if (typeof password !== 'string' || !password.trim()) {
+    return res.status(400).json({ success: false, message: 'Password is required' });
+  }
+
+  const result = await loginAdmin(email.trim().toLowerCase(), password);
   res.json({ success: true, data: result });
 }
 
@@ -85,8 +105,8 @@ export async function postRegister(req: Request, res: Response) {
     return res.status(400).json({ success: false, message: 'National ID must contain exactly 10 digits' });
   }
 
-  if (typeof password !== 'string' || password.trim().length < 6) {
-    return res.status(400).json({ success: false, message: 'Password must be at least 6 characters long' });
+  if (typeof password !== 'string' || password.trim().length < 5) {
+    return res.status(400).json({ success: false, message: 'Password must be at least 5 characters long' });
   }
 
   const result = await registerVoterAccount({
@@ -103,12 +123,18 @@ export async function postRegister(req: Request, res: Response) {
 }
 
 export async function postSanadStart(req: Request, res: Response) {
-  const { nationalId } = req.body || {};
+  const { nationalId, password } = req.body || {};
   if (typeof nationalId !== 'string' || !nationalIdPattern.test(nationalId.trim())) {
     return res.status(400).json({ success: false, message: 'National ID must contain exactly 10 digits' });
   }
 
-  const result = await startSanadLogin(nationalId.trim());
+  if (typeof password !== 'string' || !password.trim()) {
+    return res.status(400).json({ success: false, message: 'Password is required' });
+  }
+
+  const result = await startSanadLogin(nationalId.trim(), password.trim(), {
+    includeSandboxOtp: canUseDemoMode(req, 'sanad-otp'),
+  });
   res.status(201).json({ success: true, data: result });
 }
 

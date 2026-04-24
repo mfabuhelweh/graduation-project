@@ -7,7 +7,8 @@ import { EmptyState } from "@/components/EmptyState";
 import { ErrorMessage } from "@/components/ErrorMessage";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { ScreenContainer } from "@/components/ScreenContainer";
-import { colors } from "@/constants/colors";
+import type { AppColors } from "@/constants/colors";
+import { useAppPreferences } from "@/hooks/useAppPreferences";
 import { useElectionDetails } from "@/hooks/useElectionDetails";
 import {
   canViewResults,
@@ -16,6 +17,9 @@ import {
 } from "@/utils/helpers";
 
 export default function ElectionDetailsScreen() {
+  const { colors, language } = useAppPreferences();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  const isArabic = language === "ar";
   const params = useLocalSearchParams<{ id: string }>();
   const electionId = Array.isArray(params.id) ? params.id[0] : params.id;
   const { data, isLoading, error, refetch } = useElectionDetails(electionId || "");
@@ -38,8 +42,8 @@ export default function ElectionDetailsScreen() {
     return (
       <ScreenContainer scroll={false}>
         <EmptyState
-          title="تعذر تحميل الانتخاب"
-          description="معرّف الانتخاب غير موجود في الرابط الحالي."
+          title={isArabic ? "تعذر تحميل الانتخاب" : "Could not load election"}
+          description={isArabic ? "معرّف الانتخاب غير موجود في الرابط الحالي." : "The election ID is missing from the current link."}
         />
       </ScreenContainer>
     );
@@ -48,7 +52,7 @@ export default function ElectionDetailsScreen() {
   if (isLoading) {
     return (
       <ScreenContainer scroll={false}>
-        <LoadingSpinner label="جاري تحميل تفاصيل الانتخاب..." />
+        <LoadingSpinner label={isArabic ? "جاري تحميل تفاصيل الانتخاب..." : "Loading election details..."} />
       </ScreenContainer>
     );
   }
@@ -57,7 +61,7 @@ export default function ElectionDetailsScreen() {
     return (
       <ScreenContainer scroll={false}>
         <ErrorMessage
-          message={error?.message || "تعذر تحميل بيانات الانتخاب."}
+          message={error?.message || (isArabic ? "تعذر تحميل بيانات الانتخاب." : "Could not load election data.")}
           onRetry={() => refetch()}
         />
       </ScreenContainer>
@@ -68,31 +72,31 @@ export default function ElectionDetailsScreen() {
     <ScreenContainer>
       <AppHeader
         title={data.election.title}
-        subtitle="تفاصيل الانتخاب، الأهلية، والخيارات المتاحة لك كناخب."
+        subtitle={isArabic ? "تفاصيل الانتخاب، الأهلية، والخيارات المتاحة لك كناخب." : "Election details, eligibility, and the options available to you as a voter."}
       />
 
       <Card style={styles.card}>
         <Card.Content style={styles.sectionContent}>
           <View style={styles.statusRow}>
-            <Chip>{getElectionStatusLabel(data.election)}</Chip>
+            <Chip>{getElectionStatusLabel(data.election, language)}</Chip>
             <Text variant="bodyLarge" style={styles.description}>
-              {data.election.description || "لا يوجد وصف إضافي لهذا الانتخاب."}
+              {data.election.description || (isArabic ? "لا يوجد وصف إضافي لهذا الانتخاب." : "No additional description is available for this election.")}
             </Text>
           </View>
 
           <Divider />
 
           <View style={styles.metaList}>
-            <Text style={styles.metaItem}>يبدأ: {formatDate(data.election.startAt)}</Text>
-            <Text style={styles.metaItem}>ينتهي: {formatDate(data.election.endAt)}</Text>
+            <Text style={styles.metaItem}>{isArabic ? "يبدأ" : "Starts"}: {formatDate(data.election.startAt, language)}</Text>
+            <Text style={styles.metaItem}>{isArabic ? "ينتهي" : "Ends"}: {formatDate(data.election.endAt, language)}</Text>
             <Text style={styles.metaItem}>
-              الأحزاب: {data.ballot?.parties.length || data.election.partiesCount || 0}
+              {isArabic ? "الأحزاب" : "Parties"}: {data.ballot?.parties.length || data.election.partiesCount || 0}
             </Text>
             <Text style={styles.metaItem}>
-              القوائم المحلية:{" "}
+              {isArabic ? "القوائم المحلية" : "Local lists"}:{" "}
               {data.ballot?.districtLists.length || data.election.districtListsCount || 0}
             </Text>
-            <Text style={styles.metaItem}>عدد المرشحين المعروضين: {candidateCount}</Text>
+            <Text style={styles.metaItem}>{isArabic ? "عدد المرشحين المعروضين" : "Displayed candidates"}: {candidateCount}</Text>
           </View>
         </Card.Content>
       </Card>
@@ -100,19 +104,19 @@ export default function ElectionDetailsScreen() {
       <Card style={styles.card}>
         <Card.Content style={styles.sectionContent}>
           <Text variant="titleMedium" style={styles.sectionTitle}>
-            حالة الناخب
+            {isArabic ? "حالة الناخب" : "Voter Status"}
           </Text>
           <Text style={styles.metaItem}>
-            الاسم: {data.profile?.fullName || "غير متوفر"}
+            {isArabic ? "الاسم" : "Name"}: {data.profile?.fullName || (isArabic ? "غير متوفر" : "Unavailable")}
           </Text>
           <Text style={styles.metaItem}>
-            الرقم الوطني: {data.profile?.nationalId || "غير متوفر"}
+            {isArabic ? "الرقم الوطني" : "National ID"}: {data.profile?.nationalId || (isArabic ? "غير متوفر" : "Unavailable")}
           </Text>
           <Text style={styles.metaItem}>
-            هل تم التصويت؟ {data.hasVoted ? "نعم" : "لا"}
+            {isArabic ? "هل تم التصويت؟" : "Already voted?"} {data.hasVoted ? (isArabic ? "نعم" : "Yes") : (isArabic ? "لا" : "No")}
           </Text>
           <Text style={styles.metaItem}>
-            هذا هو انتخابك المخصص؟ {data.isAssignedElection ? "نعم" : "لا"}
+            {isArabic ? "هذا هو انتخابك المخصص؟" : "Assigned to you?"} {data.isAssignedElection ? (isArabic ? "نعم" : "Yes") : (isArabic ? "لا" : "No")}
           </Text>
         </Card.Content>
       </Card>
@@ -128,7 +132,7 @@ export default function ElectionDetailsScreen() {
               })
             }
           >
-            عرض النتائج
+            {isArabic ? "عرض النتائج" : "View Results"}
           </Button>
         ) : null}
 
@@ -143,16 +147,19 @@ export default function ElectionDetailsScreen() {
           }
           style={styles.voteButton}
         >
-          {data.canVote ? "الانتقال إلى التصويت" : "التصويت غير متاح"}
+          {data.canVote ? (isArabic ? "الانتقال إلى التصويت" : "Go to Voting") : (isArabic ? "التصويت غير متاح" : "Voting Unavailable")}
         </Button>
       </View>
     </ScreenContainer>
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: AppColors) {
+  return StyleSheet.create({
   card: {
-    backgroundColor: colors.surface
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderWidth: 1
   },
   sectionContent: {
     gap: 12
@@ -184,4 +191,5 @@ const styles = StyleSheet.create({
   voteButton: {
     backgroundColor: colors.primary
   }
-});
+  });
+}

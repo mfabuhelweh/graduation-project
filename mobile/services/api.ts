@@ -36,6 +36,31 @@ export const apiClient = axios.create({
   }
 });
 
+function isPrivateHostname(hostname: string) {
+  return (
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    /^10\./.test(hostname) ||
+    /^192\.168\./.test(hostname) ||
+    /^172\.(1[6-9]|2\d|3[0-1])\./.test(hostname)
+  );
+}
+
+export function getDemoModeHeaders(mode: "sanad-otp" | "face-verification" | "sms") {
+  try {
+    const hostname = new URL(appConfig.apiBaseUrl).hostname.toLowerCase();
+    if (isPrivateHostname(hostname)) {
+      return {
+        "X-Demo-Mode": mode
+      };
+    }
+  } catch {
+    // Ignore malformed local config and fall back to standard API calls.
+  }
+
+  return {};
+}
+
 apiClient.interceptors.request.use(async (config) => {
   const token = await getStoredToken();
   if (token) {
@@ -97,6 +122,9 @@ export async function issueVotingToken(
     {
       electionId,
       nationalId
+    },
+    {
+      headers: getDemoModeHeaders("face-verification")
     }
   );
   return extractData(response);
@@ -146,21 +174,18 @@ export async function fetchVoterProfile() {
     );
     const me = extractData(meResponse);
 
-    if (!me.nationalId) {
-      throw error;
-    }
-
-    const legacyResponse = await apiClient.get<ApiEnvelope<VoterProfile>>(
-      API_ENDPOINTS.voters.legacyByNationalId(me.nationalId)
-    );
-
     return {
-      ...extractData(legacyResponse),
       uid: me.uid,
       email: me.email,
       role: "voter",
-      fullName: extractData(legacyResponse).fullName || me.fullName,
-      electionId: extractData(legacyResponse).electionId || me.electionId
+      fullName: me.fullName,
+      nationalId: me.nationalId,
+      electionId: me.electionId,
+      districtId: me.districtId,
+      phoneNumber: me.phoneNumber ?? null,
+      status: me.status,
+      hasVoted: me.hasVoted,
+      verifiedFace: me.verifiedFace
     };
   }
 }

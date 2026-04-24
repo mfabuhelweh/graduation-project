@@ -49,6 +49,7 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
               uid: 'local-dev-admin',
               email: admin.rows[0].email,
               role: 'admin',
+              adminRole: 'super_admin',
               fullName: 'Local Admin',
             };
             return next();
@@ -58,6 +59,7 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
           uid: `local-dev-${role}`,
           email: fallbackEmail,
           role,
+          adminRole: role === 'admin' ? 'super_admin' : undefined,
           fullName: role === 'admin' ? 'Local Admin' : 'Local Voter',
           nationalId: role === 'voter' ? '1234567890' : undefined,
         };

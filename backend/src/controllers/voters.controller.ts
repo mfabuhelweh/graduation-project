@@ -1,5 +1,6 @@
 import type {Request, Response} from 'express';
 import {createVoter, getCurrentVoterProfile, getVoterByNationalId, listVoters, updateVoter, verifyFaceAndIssueToken} from '../services/voter.service.js';
+import { canUseDemoMode } from '../utils/requestGuards.js';
 
 export async function getVoters(_req: Request, res: Response) {
   res.json({success: true, data: await listVoters()});
@@ -45,7 +46,9 @@ export async function postFaceVerification(req: Request, res: Response) {
     return res.status(403).json({success: false, message: 'You can only verify your own voter identity'});
   }
 
-  const result = await verifyFaceAndIssueToken(req.body, req.user, req.user.email || req.user.uid);
+  const result = await verifyFaceAndIssueToken(req.body, req.user, req.user.email || req.user.uid, {
+    allowDemoVerification: canUseDemoMode(req, 'face-verification'),
+  });
   if (!result.success) {
     return res.status(403).json({success: false, message: result.message || 'Face verification failed', data: result});
   }

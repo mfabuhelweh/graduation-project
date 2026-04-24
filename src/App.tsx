@@ -7,25 +7,29 @@ import {
   Loader2,
   LogOut,
   Settings as SettingsIcon,
-  ShieldCheck,
   Users,
   Vote,
 } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
 import { AnimatePresence, motion } from 'motion/react';
 import { cn } from './lib/utils';
-import { filterFixedElections } from './lib/fixedElections';
 import {
   castVote,
   clearAuthToken,
   completeSanadLogin,
+  fetchAdminElections,
   fetchElections,
+  fetchVoters,
   fetchMe,
   getAuthToken,
+  loginAdminWithBackend,
   loginAdminWithGoogleCredential,
 } from './lib/api';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { ElectionCountdownCard } from './components/ElectionCountdownCard';
 import { MobileBottomNav } from './components/layout/MobileBottomNav';
+import { SiteFooter } from './components/layout/SiteFooter';
+import { SiteHeader } from './components/layout/SiteHeader';
 import { SidebarItem } from './components/layout/SidebarItem';
 import { useMobileShell } from './hooks/useMobileShell';
 import { Dashboard } from './pages/Dashboard';
@@ -35,12 +39,15 @@ import { VotingPage } from './pages/VotingPage';
 import { Settings } from './pages/Settings';
 import { LoginPage } from './pages/LoginPage';
 import { Notifications } from './pages/Notifications';
+import { VoterRegistry } from './pages/VoterRegistry';
 import { ElectionsPage } from './pages/admin/ElectionsPage';
 import { CreateElectionPage } from './pages/admin/CreateElectionPage';
 import { ElectionDetailsPage } from './pages/admin/ElectionDetailsPage';
+import soutakEmblem from './assets/soutak-emblem.png';
 
 type Tab =
   | 'Dashboard'
+  | 'Voter Registry'
   | 'Elections'
   | 'Create Election'
   | 'Election Details'
@@ -49,6 +56,15 @@ type Tab =
   | 'Audit Logs'
   | 'Settings'
   | 'Notifications';
+
+const sensitiveResultsAdminRoles = new Set(['super_admin', 'auditor']);
+const electionManagerAdminRoles = new Set(['super_admin', 'election_admin']);
+
+function SoutakMark({ className = 'h-11 w-11' }: { className?: string }) {
+  return (
+    <img src={soutakEmblem} alt="" className={cn('object-contain', className)} aria-hidden="true" />
+  );
+}
 
 export default function App() {
   const [activeTab, setActiveTab] = React.useState<Tab>('Dashboard');
@@ -67,14 +83,28 @@ export default function App() {
   const [isLoginLoading, setIsLoginLoading] = React.useState(false);
   const [loginError, setLoginError] = React.useState<string | null>(null);
   const [dbElections, setDbElections] = React.useState<any[]>([]);
+  const [adminVoters, setAdminVoters] = React.useState<any[]>([]);
+  const [votersLoading, setVotersLoading] = React.useState(false);
+  const [voterSearchQuery, setVoterSearchQuery] = React.useState('');
   const [selectedElectionId, setSelectedElectionId] = React.useState<string | null>(null);
   const [toast, setToast] = React.useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const mobileShell = useMobileShell();
 
+  const isAdminRoute = typeof window !== 'undefined' && window.location.pathname.replace(/\/+$/, '') === '/admin';
   const isAdmin = userProfile?.role === 'admin';
-  /** Admin UI is web-only; Capacitor/Android uses Sanad (voter) flow only. */
+  const normalizedAdminRole = String(userProfile?.adminRole || '').toLowerCase();
+  const canViewSensitiveResults = !isAdmin
+    ? false
+    : normalizedAdminRole
+      ? sensitiveResultsAdminRoles.has(normalizedAdminRole)
+      : true;
+  const canManageElectionData = !isAdmin
+    ? false
+    : normalizedAdminRole
+      ? electionManagerAdminRoles.has(normalizedAdminRole)
+      : true;
   const isNativeApp = Capacitor.isNativePlatform();
-  const showAdminShell = Boolean(isAdmin && !isNativeApp);
+  const showAdminShell = Boolean(isAdmin && !isNativeApp && isAdminRoute);
   const selectedElection = dbElections.find((election) => election.id === selectedElectionId) || null;
   const voterBoundElection =
     (!isAdmin && userProfile?.electionId
@@ -84,6 +114,7 @@ export default function App() {
     voterBoundElection ||
     dbElections.find((election) => ['active', 'scheduled'].includes(String(election.status))) ||
     dbElections[0];
+  const countdownElection = activeVotingElection || selectedElection || dbElections[0] || null;
 
   React.useEffect(() => {
     if (typeof document === 'undefined') return;
@@ -109,12 +140,28 @@ export default function App() {
           clearAuthToken();
           setLoginError(
             language === 'ar'
-              ? 'إدارة النظام من الموقع على المتصفح فقط. استخدم هذا التطبيق للدخول كناخب عبر سند.'
+              ? 'إدارة النظام متاحة عبر الموقع فقط. استخدم هذا التطبيق كناخب عبر سند.'
               : 'System admin is available only on the website. Use this app as a voter via SANAD.',
           );
           setIsAuthReady(true);
           return;
         }
+
+        if (!Capacitor.isNativePlatform() && isAdminRoute && profile.role !== 'admin') {
+          clearAuthToken();
+          setLoginError(
+            language === 'ar'
+              ? 'هذا الرابط مخصص لدخول الأدمن فقط. سجّل الدخول بحساب أدمن.'
+              : 'This route is for admin sign-in only. Sign in with an admin account.',
+          );
+          setIsAuthReady(true);
+          return;
+        }
+
+        if (!Capacitor.isNativePlatform() && profile.role === 'admin' && !isAdminRoute) {
+          window.history.replaceState(null, '', '/admin');
+        }
+
         const normalized = {
           uid: profile.uid,
           displayName: profile.fullName || profile.email || 'User',
@@ -136,19 +183,45 @@ export default function App() {
     };
 
     bootstrap();
-  }, []);
+  }, [isAdminRoute, language]);
 
   const loadElections = React.useCallback(async () => {
-    const elections = await fetchElections();
-    setDbElections(filterFixedElections(elections));
+    const shouldLoadAdminElections =
+      user?.role === 'admin' || userProfile?.role === 'admin' || (!Capacitor.isNativePlatform() && isAdminRoute);
+    const elections = shouldLoadAdminElections ? await fetchAdminElections() : await fetchElections();
+    setDbElections(Array.isArray(elections) ? elections : []);
+  }, [isAdminRoute, user?.role, userProfile?.role]);
+
+  const loadVoters = React.useCallback(async () => {
+    setVotersLoading(true);
+    try {
+      const voters = await fetchVoters();
+      setAdminVoters(voters);
+    } finally {
+      setVotersLoading(false);
+    }
   }, []);
 
   React.useEffect(() => {
     if (!user) return;
-    loadElections().catch((error) => {
-      console.error('Failed to load elections', error);
+    const jobs = [loadElections()];
+    if (user.role === 'admin') {
+      jobs.push(loadVoters());
+    }
+
+    Promise.all(jobs).catch((error) => {
+      console.error('Failed to load admin data', error);
     });
-  }, [user, loadElections]);
+  }, [user, loadElections, loadVoters]);
+
+  React.useEffect(() => {
+    if (!showAdminShell) return;
+    if (!['Elections', 'Create Election', 'Election Details'].includes(activeTab)) return;
+
+    loadElections().catch((error) => {
+      console.error('Failed to refresh elections for admin shell', error);
+    });
+  }, [activeTab, loadElections, showAdminShell]);
 
   const applyAuthenticatedUser = (result: any) => {
     const profile = {
@@ -160,6 +233,9 @@ export default function App() {
       electionId: result.user.electionId,
       nationalId: result.user.nationalId,
     };
+    if (profile.role === 'admin' && !Capacitor.isNativePlatform() && !isAdminRoute) {
+      window.history.replaceState(null, '', '/admin');
+    }
     setUser(profile);
     setUserProfile(profile);
     setActiveTab(profile.role === 'admin' ? 'Dashboard' : 'Voting');
@@ -188,7 +264,7 @@ export default function App() {
         clearAuthToken();
         setLoginError(
           language === 'ar'
-            ? 'إدارة النظام من الموقع على المتصفح فقط. سجّل الدخول كناخب عبر سند من هذا التطبيق.'
+            ? 'إدارة النظام متاحة عبر الموقع فقط. سجّل الدخول كناخب عبر سند من هذا التطبيق.'
             : 'System admin is available only on the website. Sign in as a voter via SANAD in this app.',
         );
         return;
@@ -202,12 +278,56 @@ export default function App() {
     }
   };
 
-  const handleLogout = () => {
+  const handleAdminPasswordLogin = async (email: string, password: string) => {
+    try {
+      setIsLoginLoading(true);
+      setLoginError(null);
+      const result = await loginAdminWithBackend(email, password);
+      applyAuthenticatedUser(result);
+    } catch (error) {
+      setLoginError(error instanceof Error ? error.message : 'Admin login failed');
+      throw error;
+    } finally {
+      setIsLoginLoading(false);
+    }
+  };
+
+  const performLogout = () => {
     clearAuthToken();
     setUser(null);
     setUserProfile(null);
     setActiveTab(Capacitor.isNativePlatform() ? 'Voting' : 'Dashboard');
   };
+
+  const handleSidebarLogout = () => {
+    const confirmed = window.confirm(
+      language === 'ar'
+        ? 'هل أنت متأكد من تسجيل الخروج؟ سيتم إنهاء الجلسة الحالية.'
+        : 'Are you sure you want to log out? The current session will end.',
+    );
+    if (!confirmed) return;
+    performLogout();
+  };
+
+  React.useEffect(() => {
+    if (!showAdminShell) return;
+
+    if ((activeTab === 'Results' || activeTab === 'Audit Logs') && !canViewSensitiveResults) {
+      setActiveTab('Dashboard');
+      return;
+    }
+
+    if ((activeTab === 'Create Election' || activeTab === 'Election Details') && !canManageElectionData) {
+      setActiveTab('Elections');
+    }
+  }, [activeTab, canManageElectionData, canViewSensitiveResults, showAdminShell]);
+
+  React.useEffect(() => {
+    if (!showAdminShell || activeTab !== 'Voter Registry') return;
+    loadVoters().catch((error) => {
+      console.error('Failed to refresh voters', error);
+    });
+  }, [activeTab, loadVoters, showAdminShell]);
 
   if (!isAuthReady) {
     return (
@@ -224,27 +344,38 @@ export default function App() {
       <ErrorBoundary>
         <LoginPage
           onSanadComplete={handleSanadComplete}
+          onAdminPasswordLogin={handleAdminPasswordLogin}
           onAdminGoogleLogin={handleAdminGoogleLogin}
           isLoading={isLoginLoading}
           error={loginError}
           language={language}
+          theme={theme}
+          onToggleTheme={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+          adminOnly={isAdminRoute && !isNativeApp}
         />
       </ErrorBoundary>
     );
   }
 
-  const sidebarItems = showAdminShell
-    ? [
-        { key: 'Dashboard', label: language === 'ar' ? 'لوحة التحكم' : 'Dashboard', icon: LayoutDashboard },
-        { key: 'Elections', label: language === 'ar' ? 'الانتخابات' : 'Elections', icon: FileText },
-        { key: 'Results', label: language === 'ar' ? 'النتائج' : 'Results', icon: BarChart3 },
-        { key: 'Audit Logs', label: language === 'ar' ? 'سجل العمليات' : 'Audit Logs', icon: Users },
-      ]
-    : [
-        { key: 'Voting', label: language === 'ar' ? 'التصويت الإلكتروني' : 'Voting', icon: Vote },
-        { key: 'Results', label: language === 'ar' ? 'النتائج النهائية' : 'Results', icon: BarChart3 },
-        { key: 'Notifications', label: language === 'ar' ? 'الإشعارات' : 'Notifications', icon: Bell },
-      ];
+  const adminSidebarItems = [
+    { key: 'Voter Registry', label: language === 'ar' ? 'سجل الناخبين' : 'Voter Registry', icon: Users },
+    { key: 'Dashboard', label: language === 'ar' ? 'لوحة التحكم' : 'Dashboard', icon: LayoutDashboard },
+    { key: 'Elections', label: language === 'ar' ? 'الانتخابات' : 'Elections', icon: FileText },
+    ...(canViewSensitiveResults
+      ? [
+          { key: 'Results', label: language === 'ar' ? 'النتائج' : 'Results', icon: BarChart3 },
+          { key: 'Audit Logs', label: language === 'ar' ? 'سجل العمليات' : 'Audit Logs', icon: Users },
+        ]
+      : []),
+  ];
+
+  const voterSidebarItems = [
+    { key: 'Voting', label: language === 'ar' ? 'التصويت الإلكتروني' : 'Voting', icon: Vote },
+    { key: 'Results', label: language === 'ar' ? 'النتائج النهائية' : 'Results', icon: BarChart3 },
+    { key: 'Notifications', label: language === 'ar' ? 'الإشعارات' : 'Notifications', icon: Bell },
+  ];
+
+  const sidebarItems = showAdminShell ? adminSidebarItems : voterSidebarItems;
 
   const mappedTab: Tab =
     showAdminShell && (activeTab === 'Create Election' || activeTab === 'Election Details')
@@ -252,14 +383,17 @@ export default function App() {
       : activeTab;
 
   const voterPrimaryTabs: Tab[] = ['Voting', 'Results', 'Notifications', 'Settings'];
-  const adminPrimaryTabs: Tab[] = ['Dashboard', 'Elections', 'Results', 'Settings'];
+  const adminPrimaryTabs: Tab[] = canViewSensitiveResults
+    ? ['Dashboard', 'Voter Registry', 'Elections', 'Results', 'Settings']
+    : ['Dashboard', 'Voter Registry', 'Elections', 'Settings'];
   const primaryTabs = showAdminShell ? adminPrimaryTabs : voterPrimaryTabs;
 
   const mobileNavItems = primaryTabs.map((tabKey) => {
     if (tabKey === 'Settings') {
       return { key: tabKey, label: language === 'ar' ? 'الإعدادات' : 'Settings', icon: SettingsIcon };
     }
-    const def = sidebarItems.find((s) => s.key === tabKey);
+
+    const def = sidebarItems.find((item) => item.key === tabKey);
     return {
       key: tabKey,
       label: def?.label || String(tabKey),
@@ -267,26 +401,52 @@ export default function App() {
     };
   });
 
+  const useVoterTopNav = !showAdminShell && !mobileShell;
+  const voterTopNavItems = [
+    ...sidebarItems,
+    { key: 'Settings', label: language === 'ar' ? 'الإعدادات' : 'Settings', icon: SettingsIcon },
+  ];
+  const headerNavItems = (
+    useVoterTopNav
+      ? voterTopNavItems
+      : primaryTabs.map((tabKey) => {
+          if (tabKey === 'Settings') {
+            return { key: tabKey, label: language === 'ar' ? 'الإعدادات' : 'Settings', icon: SettingsIcon };
+          }
+          const def = sidebarItems.find((item) => item.key === tabKey);
+          return { key: String(tabKey), label: def?.label || String(tabKey), icon: def?.icon };
+        })
+  ).map(({ key, label, icon }) => ({
+    key: String(key),
+    label,
+    icon,
+    active: mappedTab === key || activeTab === key,
+    onClick: () => setActiveTab(key as Tab),
+  }));
+
   return (
     <ErrorBoundary>
       <div
-        className="app-shell flex min-h-dvh flex-col bg-slate-50 transition-[background-color,color,border-color] duration-300 md:min-h-screen md:flex-row"
+        className={cn(
+          'app-shell flex min-h-dvh flex-col transition-[background-color,color,border-color] duration-300 md:min-h-screen md:flex-row',
+          !showAdminShell && 'voter-web-shell',
+        )}
         dir={language === 'ar' ? 'rtl' : 'ltr'}
       >
         <aside
           className={cn(
-            'flex w-72 shrink-0 flex-col border-slate-200 bg-white md:border-l',
-            mobileShell ? 'hidden' : 'hidden md:flex',
+            'app-panel app-sidebar flex w-72 shrink-0 flex-col md:border-l',
+            mobileShell || useVoterTopNav ? 'hidden' : 'hidden md:flex',
           )}
         >
-          <div className="flex items-center gap-3 border-b border-slate-100 p-6">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-600 text-white shadow-lg shadow-blue-200">
-              <ShieldCheck className="h-6 w-6" />
+          <div className="app-brand-card flex items-center gap-3 border-b border-slate-100 p-6">
+            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-blue-600 text-white shadow-lg shadow-blue-200">
+              <SoutakMark className="h-11 w-11" />
             </div>
             <div className="text-right">
-              <h1 className="font-black text-slate-900">{language === 'ar' ? 'نظام الاقتراع' : 'Voting System'}</h1>
+              <h1 className="font-black text-slate-900">{language === 'ar' ? 'صوتك' : 'Soutak'}</h1>
               <p className="text-xs font-bold text-blue-600">
-                {language === 'ar' ? 'المملكة الأردنية' : 'Jordan'}
+                {language === 'ar' ? 'نظام الاقتراع الإلكتروني' : 'Electronic voting'}
               </p>
             </div>
           </div>
@@ -309,7 +469,7 @@ export default function App() {
                 active={activeTab === 'Settings'}
                 onClick={() => setActiveTab('Settings')}
               />
-              {showAdminShell && (
+              {showAdminShell && canViewSensitiveResults && (
                 <SidebarItem
                   icon={Bell}
                   label={language === 'ar' ? 'الإشعارات' : 'Notifications'}
@@ -321,14 +481,20 @@ export default function App() {
           </div>
 
           <div className="border-t border-slate-100 p-4">
-            <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4 text-right">
+            <div className="app-user-card rounded-lg border border-slate-100 bg-slate-50 p-4 text-right">
               <p className="font-black text-slate-900">{user.displayName}</p>
               <p className="mt-1 text-xs text-slate-500">
-                {showAdminShell ? (language === 'ar' ? 'مسؤول النظام' : 'System Admin') : language === 'ar' ? 'ناخب مسجل' : 'Registered Voter'}
+                {showAdminShell
+                  ? language === 'ar'
+                    ? 'مسؤول النظام'
+                    : 'System Admin'
+                  : language === 'ar'
+                    ? 'ناخب مسجل'
+                    : 'Registered Voter'}
               </p>
             </div>
             <button
-              onClick={handleLogout}
+              onClick={handleSidebarLogout}
               className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-rose-100 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700 hover:bg-rose-100"
             >
               <LogOut className="h-4 w-4" />
@@ -343,49 +509,19 @@ export default function App() {
             mobileShell && 'pb-[calc(3.5rem+max(0.75rem,env(safe-area-inset-bottom)))]',
           )}
         >
-          <header
-            className={cn(
-              'sticky top-0 z-30 flex items-center justify-between border-b border-slate-200 bg-white/95 backdrop-blur-md',
-              mobileShell
-                ? 'px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))]'
-                : 'px-8 py-5',
-            )}
-          >
-            <button
-              onClick={() => setLanguage(language === 'ar' ? 'en' : 'ar')}
-              className={cn(
-                'rounded-xl bg-slate-100 font-bold text-slate-700 hover:bg-slate-200',
-                mobileShell ? 'px-3 py-2 text-xs' : 'px-4 py-2 text-sm',
-              )}
-            >
-              {language === 'ar' ? 'English' : 'العربية'}
-            </button>
-            <div className={cn('min-w-0', language === 'ar' ? 'text-right' : 'text-left')}>
-              <h2
-                className={cn(
-                  'truncate font-black text-slate-900',
-                  mobileShell ? 'max-w-[65vw] text-base' : 'text-xl',
-                )}
-              >
-                {{
-                  Dashboard: language === 'ar' ? 'لوحة التحكم' : 'Dashboard',
-                  Elections: language === 'ar' ? 'الانتخابات' : 'Elections',
-                  'Create Election': language === 'ar' ? 'تعديل الانتخاب' : 'Edit Election',
-                  'Election Details': language === 'ar' ? 'تفاصيل الانتخاب' : 'Election Details',
-                  Voting: language === 'ar' ? 'التصويت الإلكتروني' : 'Voting',
-                  Results: language === 'ar' ? 'النتائج النهائية' : 'Results',
-                  'Audit Logs': language === 'ar' ? 'سجل العمليات' : 'Audit Logs',
-                  Settings: language === 'ar' ? 'الإعدادات' : 'Settings',
-                  Notifications: language === 'ar' ? 'الإشعارات' : 'Notifications',
-                }[activeTab]}
-              </h2>
-              <p className="text-[10px] font-bold text-emerald-600 md:text-xs">
-                {language === 'ar' ? 'متصل بالنظام' : 'Connected'}
-              </p>
-            </div>
-          </header>
+          {!mobileShell && (
+            <SiteHeader
+              language={language}
+              onToggleLanguage={() => setLanguage(language === 'ar' ? 'en' : 'ar')}
+              theme={theme}
+              onToggleTheme={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+              userDisplayName={user?.displayName}
+              navItems={headerNavItems}
+              hideNav={showAdminShell}
+            />
+          )}
 
-          <div className={cn('flex-1', mobileShell ? 'overflow-y-auto p-4' : 'p-8')}>
+          <div className={cn('app-content flex-1', mobileShell ? 'overflow-y-auto p-4' : 'p-8')}>
             <AnimatePresence>
               {toast && (
                 <motion.div
@@ -393,7 +529,7 @@ export default function App() {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -20 }}
                   className={cn(
-                    'mb-6 rounded-xl px-4 py-3 text-right text-sm font-bold',
+                    'mb-6 rounded-lg px-4 py-3 text-right text-sm font-bold',
                     toast.type === 'success' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700',
                   )}
                 >
@@ -401,6 +537,8 @@ export default function App() {
                 </motion.div>
               )}
             </AnimatePresence>
+
+            <ElectionCountdownCard election={countdownElection} language={language} />
 
             {showAdminShell && activeTab === 'Dashboard' && (
               <Dashboard
@@ -414,11 +552,25 @@ export default function App() {
               />
             )}
 
+            {showAdminShell && activeTab === 'Voter Registry' && (
+              <VoterRegistry
+                voters={adminVoters}
+                searchQuery={voterSearchQuery}
+                onSearchChange={setVoterSearchQuery}
+                loading={votersLoading}
+              />
+            )}
+
             {showAdminShell && activeTab === 'Elections' && (
               <ElectionsPage
                 elections={dbElections}
                 language={language}
                 setToast={setToast}
+                canManageElectionData={canManageElectionData}
+                onCreate={() => {
+                  setSelectedElectionId(null);
+                  setActiveTab('Create Election');
+                }}
                 onOpenDetails={(electionId) => {
                   setSelectedElectionId(electionId);
                   setActiveTab('Election Details');
@@ -427,23 +579,30 @@ export default function App() {
                   setSelectedElectionId(electionId);
                   setActiveTab('Create Election');
                 }}
-                onRefresh={loadElections}
+                onRefresh={async () => {
+                  await Promise.all([loadElections(), loadVoters()]);
+                }}
               />
             )}
 
             {showAdminShell && activeTab === 'Create Election' && (
               <CreateElectionPage
                 setToast={setToast}
-                onCancel={() => setActiveTab('Elections')}
-                initialElection={selectedElection}
-                onCreated={async (election) => {
-                  await loadElections();
-                  setSelectedElectionId(election.id);
+                onCancel={() => {
+                  setSelectedElectionId(null);
                   setActiveTab('Elections');
+                }}
+                initialElection={selectedElection}
+                editingElectionId={selectedElectionId}
+                canManageElectionData={canManageElectionData}
+                onCreated={async (election) => {
+                  await Promise.all([loadElections(), loadVoters()]);
+                  setSelectedElectionId(election.id);
+                  setActiveTab('Election Details');
                 }}
                 onDeleted={async () => {
                   setSelectedElectionId(null);
-                  await loadElections();
+                  await Promise.all([loadElections(), loadVoters()]);
                   setActiveTab('Elections');
                 }}
               />
@@ -453,8 +612,11 @@ export default function App() {
               <ElectionDetailsPage
                 electionId={selectedElectionId}
                 setToast={setToast}
+                canManageElectionData={canManageElectionData}
                 onBack={() => setActiveTab('Elections')}
-                onRefreshList={loadElections}
+                onRefreshList={async () => {
+                  await Promise.all([loadElections(), loadVoters()]);
+                }}
               />
             )}
 
@@ -475,7 +637,10 @@ export default function App() {
                     token: payload.votingToken,
                   });
                   await loadElections();
-                  setToast({ message: language === 'ar' ? 'تم تسجيل صوتك بنجاح' : 'Vote recorded', type: 'success' });
+                  setToast({
+                    message: language === 'ar' ? 'تم تسجيل صوتك بنجاح' : 'Vote recorded',
+                    type: 'success',
+                  });
                   setTimeout(() => setToast(null), 2500);
                 }}
               />
@@ -483,7 +648,7 @@ export default function App() {
 
             {activeTab === 'Results' && (
               <Results
-                isAdmin={showAdminShell}
+                isAdmin={showAdminShell && canViewSensitiveResults}
                 setToast={setToast}
                 language={language}
                 elections={dbElections}
@@ -492,6 +657,7 @@ export default function App() {
             )}
 
             {showAdminShell && activeTab === 'Audit Logs' && <AuditLogs setToast={setToast} language={language} />}
+
             {activeTab === 'Settings' && (
               <Settings
                 setToast={setToast}
@@ -501,11 +667,16 @@ export default function App() {
                 setTheme={setTheme}
                 userProfile={userProfile}
                 setUserProfile={setUserProfile}
-                onLogout={handleLogout}
+                onLogout={performLogout}
+                canViewSensitiveResults={canViewSensitiveResults}
+                canManageElectionData={canManageElectionData}
               />
             )}
+
             {activeTab === 'Notifications' && <Notifications language={language} />}
           </div>
+
+          {!mobileShell && <SiteFooter language={language} />}
         </main>
 
         {mobileShell && (

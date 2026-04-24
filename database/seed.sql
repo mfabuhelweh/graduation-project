@@ -48,12 +48,15 @@ VALUES
   ('40000000-0000-0000-0000-000000000004', '10000000-0000-0000-0000-000000000001', NULL, '30000000-0000-0000-0000-000000000001', 'party_list', 'Progress Party National List', 'Progress Party', 101, NULL)
 ON CONFLICT (id) DO UPDATE SET full_name = EXCLUDED.full_name;
 
-INSERT INTO voters (id, election_id, district_id, full_name, national_id, gender, birth_date, phone_number, email, status)
+INSERT INTO voters (id, election_id, district_id, full_name, national_id, gender, birth_date, phone_number, email, password_hash, status)
 VALUES
-  ('50000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000001', 'Ahmad Saleh', '1234567890', 'male', '1997-03-14', '0791111111', 'ahmad@example.test', 'eligible'),
-  ('50000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000001', 'Lina Hassan', '1234567891', 'female', '1999-08-21', '0792222222', 'lina@example.test', 'eligible'),
-  ('50000000-0000-0000-0000-000000000003', '10000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000002', 'Omar Khaled', '1234567892', 'male', '1994-11-02', '0793333333', 'omar@example.test', 'eligible')
-ON CONFLICT (election_id, national_id) DO UPDATE SET full_name = EXCLUDED.full_name;
+  ('50000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000001', 'Ahmad Saleh', '1234567890', 'male', '1997-03-14', '0791111111', 'ahmad@example.test', crypt('12345', gen_salt('bf')), 'eligible'),
+  ('50000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000001', 'Lina Hassan', '1234567891', 'female', '1999-08-21', '0792222222', 'lina@example.test', crypt('12345', gen_salt('bf')), 'eligible'),
+  ('50000000-0000-0000-0000-000000000003', '10000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000002', 'Omar Khaled', '1234567892', 'male', '1994-11-02', '0793333333', 'omar@example.test', crypt('12345', gen_salt('bf')), 'eligible')
+ON CONFLICT (election_id, national_id) DO UPDATE
+SET
+  full_name = EXCLUDED.full_name,
+  password_hash = EXCLUDED.password_hash;
 
 INSERT INTO system_settings (key, value)
 VALUES

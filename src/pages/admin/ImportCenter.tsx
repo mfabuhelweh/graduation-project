@@ -1,5 +1,6 @@
 import * as React from 'react';
 import {
+  AlertTriangle,
   Download,
   FileSpreadsheet,
   Loader2,
@@ -18,6 +19,7 @@ interface ImportCenterProps {
   electionId?: string;
   onImported: () => Promise<void> | void;
   setToast: (toast: any) => void;
+  canManageElectionData: boolean;
 }
 
 const labels: Record<string, string> = {
@@ -69,7 +71,46 @@ function formatDateTime(value?: string | null) {
   });
 }
 
-export const ImportCenter = ({ electionId, onImported, setToast }: ImportCenterProps) => {
+function getSummaryHighlights(kind: string, result: any) {
+  const insertedRows = Number(result?.insertedRows || 0);
+  const skippedRows = Number(result?.skippedRows || 0);
+  const errorsCount = Number(result?.errors?.length || 0);
+
+  switch (kind) {
+    case 'districts':
+      return [
+        { label: 'دوائر مستوردة', value: insertedRows, tone: 'text-blue-700' },
+        { label: 'صفوف متجاوزة', value: skippedRows, tone: 'text-amber-700' },
+        { label: 'أخطاء', value: errorsCount, tone: 'text-rose-700' },
+      ];
+    case 'party_candidates':
+    case 'district_list_candidates':
+      return [
+        { label: 'مرشحون مستوردون', value: insertedRows, tone: 'text-blue-700' },
+        { label: 'صفوف متجاوزة', value: skippedRows, tone: 'text-amber-700' },
+        { label: 'أخطاء محتملة', value: errorsCount, tone: 'text-rose-700' },
+      ];
+    case 'voters':
+      return [
+        { label: 'ناخبون مستوردون', value: insertedRows, tone: 'text-blue-700' },
+        { label: 'أرقام متجاوزة', value: skippedRows, tone: 'text-amber-700' },
+        { label: 'أخطاء/تكرارات', value: errorsCount, tone: 'text-rose-700' },
+      ];
+    default:
+      return [
+        { label: 'صفوف ناجحة', value: insertedRows, tone: 'text-blue-700' },
+        { label: 'صفوف متجاوزة', value: skippedRows, tone: 'text-amber-700' },
+        { label: 'أخطاء', value: errorsCount, tone: 'text-rose-700' },
+      ];
+  }
+}
+
+export const ImportCenter = ({
+  electionId,
+  onImported,
+  setToast,
+  canManageElectionData,
+}: ImportCenterProps) => {
   const [config, setConfig] = React.useState<any>(null);
   const [loadingKey, setLoadingKey] = React.useState<string | null>(null);
   const [results, setResults] = React.useState<Record<string, any>>({});
@@ -134,6 +175,11 @@ export const ImportCenter = ({ electionId, onImported, setToast }: ImportCenterP
   };
 
   const handleUpload = async (kind: string) => {
+    if (!canManageElectionData) {
+      showToast('هذا الدور الإداري لا يملك صلاحية رفع ملفات الاستيراد.', 'error');
+      return;
+    }
+
     const file = selectedFiles[kind];
     if (!file) {
       showToast('اختر ملفًا أولًا قبل تنفيذ الرفع.', 'error');
@@ -154,7 +200,7 @@ export const ImportCenter = ({ electionId, onImported, setToast }: ImportCenterP
       }));
       setSelectedFiles((current) => ({ ...current, [kind]: null }));
       await Promise.all([loadImportBatches(), onImported()]);
-      showToast(`تم استيراد ${labels[kind]} بنجاح.`, 'success');
+      showToast(`تم استيراد ${labels[kind]} بنجاح. راجع ملخص الاستيراد قبل المتابعة.`, 'success');
     } catch (error) {
       showToast(error instanceof Error ? error.message : 'تعذر تنفيذ عملية الاستيراد.', 'error');
     } finally {
@@ -163,6 +209,11 @@ export const ImportCenter = ({ electionId, onImported, setToast }: ImportCenterP
   };
 
   const handleRollbackBatch = async (batch: any) => {
+    if (!canManageElectionData) {
+      showToast('هذا الدور الإداري لا يملك صلاحية حذف دفعات الاستيراد.', 'error');
+      return;
+    }
+
     const batchId = batch.batchId || batch.id;
     const batchFileName = batch.uploadedFileName || batch.fileName || 'الملف المحدد';
     const batchEntityType = batch.entityType;
@@ -200,10 +251,11 @@ export const ImportCenter = ({ electionId, onImported, setToast }: ImportCenterP
   const renderImportCard = (kind: string) => {
     const result = results[kind];
     const selectedFile = selectedFiles[kind];
+    const highlights = result ? getSummaryHighlights(kind, result) : [];
 
     return (
       <div key={kind} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="flex flex-row-reverse items-start justify-between gap-4">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="flex items-start gap-3">
             <FileSpreadsheet className="mt-1 h-5 w-5 text-blue-600" />
             <div className="text-right">
@@ -214,7 +266,7 @@ export const ImportCenter = ({ electionId, onImported, setToast }: ImportCenterP
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
             <button
               onClick={() => handleDownload(kind)}
               className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"
@@ -230,6 +282,7 @@ export const ImportCenter = ({ electionId, onImported, setToast }: ImportCenterP
                 type="file"
                 accept=".csv,.xlsx"
                 className="hidden"
+                disabled={!canManageElectionData}
                 onChange={(event) => handleChooseFile(kind, event.target.files?.[0] || null)}
               />
             </label>
@@ -238,16 +291,14 @@ export const ImportCenter = ({ electionId, onImported, setToast }: ImportCenterP
 
         {selectedFile && (
           <div className="mt-4 rounded-xl border border-blue-100 bg-blue-50 p-4 text-right">
-            <div className="flex flex-row-reverse items-start justify-between gap-3">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-bold text-slate-400">الملف المحدد</p>
                 <p className="mt-1 truncate text-sm font-black text-slate-900">{selectedFile.name}</p>
-                <p className="mt-1 text-xs text-slate-500">
-                  الحجم: {(selectedFile.size / 1024).toFixed(1)} KB
-                </p>
+                <p className="mt-1 text-xs text-slate-500">الحجم: {(selectedFile.size / 1024).toFixed(1)} KB</p>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center justify-end gap-2">
                 <button
                   onClick={() => handleClearFile(kind)}
                   disabled={loadingKey === kind}
@@ -259,14 +310,10 @@ export const ImportCenter = ({ electionId, onImported, setToast }: ImportCenterP
 
                 <button
                   onClick={() => handleUpload(kind)}
-                  disabled={loadingKey === kind}
+                  disabled={!canManageElectionData || loadingKey === kind}
                   className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-700 disabled:opacity-60"
                 >
-                  {loadingKey === kind ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <UploadCloud className="h-4 w-4" />
-                  )}
+                  {loadingKey === kind ? <Loader2 className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />}
                   رفع الآن
                 </button>
               </div>
@@ -279,52 +326,48 @@ export const ImportCenter = ({ electionId, onImported, setToast }: ImportCenterP
         )}
 
         {result && (
-          <div className="mt-4 rounded-xl border border-slate-100 bg-slate-50 p-4 text-right">
-            <div className="mb-4 rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700">
+          <div className="mt-4 space-y-4 rounded-xl border border-slate-100 bg-slate-50 p-4 text-right">
+            <div className="rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700">
               آخر ملف تم رفعه: {result.uploadedFileName || result.fileName || labels[kind]}
             </div>
 
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-              <div>
-                <p className="text-xs text-slate-400">الصفوف المضافة</p>
-                <p className="mt-1 text-lg font-black text-emerald-600">{result.insertedRows}</p>
+            <div className="rounded-2xl border border-slate-200 bg-white p-4">
+              <div className="mb-3 flex items-center justify-end gap-2">
+                <span className="text-sm font-black text-slate-900">ملخص الاستيراد</span>
+                <AlertTriangle className="h-4 w-4 text-blue-600" />
               </div>
-              <div>
-                <p className="text-xs text-slate-400">الصفوف المتجاوزة</p>
-                <p className="mt-1 text-lg font-black text-amber-600">{result.skippedRows}</p>
-              </div>
-              <div>
-                <p className="text-xs text-slate-400">أخطاء التحقق</p>
-                <p className="mt-1 text-lg font-black text-rose-600">{result.errors?.length || 0}</p>
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                {highlights.map((item) => (
+                  <div key={item.label} className="rounded-xl bg-slate-50 p-3">
+                    <p className="text-xs text-slate-400">{item.label}</p>
+                    <p className={`mt-2 text-lg font-black ${item.tone}`}>{item.value}</p>
+                  </div>
+                ))}
               </div>
             </div>
 
             {result.batchId && !result.rolledBackAt && (
-              <div className="mt-4">
+              <div>
                 <button
                   onClick={() => handleRollbackBatch(result)}
-                  disabled={deletingBatchId === result.batchId}
+                  disabled={!canManageElectionData || deletingBatchId === result.batchId}
                   className="inline-flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-4 py-2 text-xs font-bold text-rose-700 hover:bg-rose-100 disabled:opacity-60"
                 >
-                  {deletingBatchId === result.batchId ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <RotateCcw className="h-4 w-4" />
-                  )}
+                  {deletingBatchId === result.batchId ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
                   حذف البيانات التي جاء بها هذا الملف
                 </button>
               </div>
             )}
 
             {result.rollbackNote && (
-              <div className="mt-4 rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-700">
+              <div className="rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-700">
                 {result.rollbackNote}
               </div>
             )}
 
             {result.errors?.length > 0 && (
-              <div className="mt-4 space-y-2">
-                {result.errors.map((error: any) => (
+              <div className="space-y-2">
+                {result.errors.slice(0, 5).map((error: any) => (
                   <div
                     key={`${kind}-${error.rowNumber}-${error.message}`}
                     className="rounded-lg border border-rose-100 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700"
@@ -332,6 +375,11 @@ export const ImportCenter = ({ electionId, onImported, setToast }: ImportCenterP
                     الصف {error.rowNumber}: {error.message}
                   </div>
                 ))}
+                {result.errors.length > 5 && (
+                  <div className="text-xs font-bold text-slate-500">
+                    تم إخفاء {result.errors.length - 5} أخطاء إضافية لتسهيل المراجعة.
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -345,7 +393,10 @@ export const ImportCenter = ({ electionId, onImported, setToast }: ImportCenterP
       <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-right">
         <h4 className="text-base font-black text-slate-900">مركز استيراد بيانات الانتخاب</h4>
         <p className="mt-2 text-xs font-bold text-blue-700">
-          يتم ربط كل الملفات بالانتخاب المفتوح حاليًا، لذلك لا تحتاج إلى رفع elections.xlsx أو تعبئة election_title.
+          يتم ربط كل الملفات بالانتخاب المفتوح حاليًا، لذلك لا تحتاج إلى رفع
+          <span className="mx-1">`elections.xlsx`</span>
+          أو تعبئة
+          <span className="mx-1">`election_title`</span>.
         </p>
       </div>
 
@@ -360,9 +411,7 @@ export const ImportCenter = ({ electionId, onImported, setToast }: ImportCenterP
                 <h4 className="text-lg font-black text-slate-900">{group.title}</h4>
                 <p className="mt-1 text-sm text-slate-500">{group.description}</p>
               </div>
-              <div className="space-y-3">
-                {visibleItems.map((kind) => renderImportCard(kind))}
-              </div>
+              <div className="space-y-3">{visibleItems.map((kind) => renderImportCard(kind))}</div>
             </section>
           );
         })}
@@ -373,7 +422,7 @@ export const ImportCenter = ({ electionId, onImported, setToast }: ImportCenterP
           <div className="text-right">
             <h4 className="text-base font-black text-slate-900">سجل الملفات المرفوعة</h4>
             <p className="mt-1 text-sm text-slate-500">
-              من هنا يمكنك مراجعة كل دفعة استيراد وحذف البيانات التي أضافها ملف معين من قاعدة البيانات.
+              من هنا يمكنك مراجعة كل دفعة استيراد وحذف البيانات التي أضافها ملف معيّن من قاعدة البيانات.
             </p>
           </div>
           {loadingBatches && <Loader2 className="h-5 w-5 animate-spin text-blue-600" />}
@@ -388,11 +437,8 @@ export const ImportCenter = ({ electionId, onImported, setToast }: ImportCenterP
             batches.map((batch) => {
               const isRolledBack = batch.status === 'rolled_back';
               return (
-                <div
-                  key={batch.id}
-                  className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-right"
-                >
-                  <div className="flex flex-row-reverse items-start justify-between gap-3">
+                <div key={batch.id} className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-right">
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center justify-end gap-2">
                         <span className="rounded-full bg-blue-100 px-3 py-1 text-[11px] font-bold text-blue-700">
@@ -400,9 +446,7 @@ export const ImportCenter = ({ electionId, onImported, setToast }: ImportCenterP
                         </span>
                         <span
                           className={`rounded-full px-3 py-1 text-[11px] font-bold ${
-                            isRolledBack
-                              ? 'bg-amber-100 text-amber-700'
-                              : 'bg-emerald-100 text-emerald-700'
+                            isRolledBack ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'
                           }`}
                         >
                           {isRolledBack ? 'تم حذف بياناته' : 'نشط'}
@@ -410,27 +454,19 @@ export const ImportCenter = ({ electionId, onImported, setToast }: ImportCenterP
                       </div>
 
                       <p className="mt-3 truncate text-sm font-black text-slate-900">{batch.fileName}</p>
-                      <p className="mt-1 text-xs text-slate-500">
-                        تاريخ الرفع: {formatDateTime(batch.createdAt)}
-                      </p>
+                      <p className="mt-1 text-xs text-slate-500">تاريخ الرفع: {formatDateTime(batch.createdAt)}</p>
                       {batch.rolledBackAt && (
-                        <p className="mt-1 text-xs text-amber-700">
-                          تاريخ حذف البيانات: {formatDateTime(batch.rolledBackAt)}
-                        </p>
+                        <p className="mt-1 text-xs text-amber-700">تاريخ حذف البيانات: {formatDateTime(batch.rolledBackAt)}</p>
                       )}
                     </div>
 
                     {!isRolledBack && (
                       <button
                         onClick={() => handleRollbackBatch(batch)}
-                        disabled={deletingBatchId === batch.id}
+                        disabled={!canManageElectionData || deletingBatchId === batch.id}
                         className="inline-flex items-center gap-2 rounded-lg border border-rose-200 bg-white px-3 py-2 text-xs font-bold text-rose-700 hover:bg-rose-50 disabled:opacity-60"
                       >
-                        {deletingBatchId === batch.id ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <RotateCcw className="h-4 w-4" />
-                        )}
+                        {deletingBatchId === batch.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
                         حذف بيانات الملف
                       </button>
                     )}
@@ -459,7 +495,7 @@ export const ImportCenter = ({ electionId, onImported, setToast }: ImportCenterP
 
                   {batch.errors?.length > 0 && (
                     <div className="mt-4 space-y-2">
-                      {batch.errors.map((error: any, index: number) => (
+                      {batch.errors.slice(0, 4).map((error: any, index: number) => (
                         <div
                           key={`${batch.id}-${index}`}
                           className="rounded-lg border border-rose-100 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700"

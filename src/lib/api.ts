@@ -30,7 +30,17 @@ function resolveApiBaseUrl(): string {
 }
 
 const API_BASE_URL = resolveApiBaseUrl();
-const DEV_AUTH_ENABLED = import.meta.env.DEV && import.meta.env.VITE_ENABLE_DEV_AUTH === 'true';
+const DEV_AUTH_ENABLED = import.meta.env.VITE_ENABLE_DEV_AUTH === 'true';
+
+function getDemoModeHeaders(mode: 'sanad-otp' | 'face-verification' | 'sms') {
+  if (!DEV_AUTH_ENABLED) {
+    return {};
+  }
+
+  return {
+    'X-Demo-Mode': mode,
+  };
+}
 
 const AUTH_TOKEN_KEY = 'vote_secure_auth_token';
 
@@ -84,8 +94,31 @@ export interface RegisterPayload {
   phoneNumber?: string;
 }
 
+export interface AdminVoterRecord {
+  id: string;
+  electionId?: string;
+  electionTitle?: string;
+  districtId?: string;
+  districtName?: string;
+  governorateName?: string;
+  districtCode?: string;
+  fullName: string;
+  nationalId: string;
+  gender?: 'male' | 'female';
+  birthDate?: string;
+  age?: number;
+  phoneNumber?: string;
+  email?: string;
+  hasVoted?: boolean;
+  verifiedFace?: boolean;
+  status?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface SanadStartPayload {
   nationalId: string;
+  password: string;
 }
 
 export interface SanadOtpPayload {
@@ -313,6 +346,11 @@ export async function fetchDashboardSummary() {
   return response.data;
 }
 
+export async function fetchVoters() {
+  const response = await request<ApiResponse<AdminVoterRecord[]>>('/voters');
+  return response.data;
+}
+
 export async function fetchAuditLogs() {
   const response = await request<ApiResponse<any[]>>('/audit');
   return response.data;
@@ -372,6 +410,24 @@ export async function loginAdminWithGoogleCredential(credential: string) {
   return body.data;
 }
 
+export async function loginAdminWithBackend(email: string, password: string) {
+  const response = await apiFetch('/auth/admin/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  });
+  const body = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(body?.message || `API request failed with status ${response.status}`);
+  }
+
+  if (body?.data?.token) {
+    storeAuthToken(body.data.token);
+  }
+
+  return body.data;
+}
+
 export async function registerWithBackend(payload: RegisterPayload) {
   const response = await apiFetch('/auth/register', {
     method: 'POST',
@@ -393,7 +449,10 @@ export async function registerWithBackend(payload: RegisterPayload) {
 export async function startSanadLogin(payload: SanadStartPayload) {
   const response = await apiFetch('/auth/sanad/start', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...getDemoModeHeaders('sanad-otp'),
+    },
     body: JSON.stringify(payload),
   });
   const body = await response.json().catch(() => null);
@@ -444,6 +503,7 @@ export async function fetchMe() {
 export async function verifyFaceAndIssueToken(payload: FaceVerificationPayload) {
   const response = await request<ApiResponse<any>>('/voters/verify-face', {
     method: 'POST',
+    headers: getDemoModeHeaders('face-verification'),
     body: JSON.stringify(payload),
   });
   return response.data;

@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Image, ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
 import { Text } from "react-native-paper";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { colors } from "@/constants/colors";
+import { useAppPreferences } from "@/hooks/useAppPreferences";
 import { fetchBallotOptions, issueVotingToken, submitVote } from "@/services/api";
+import type { AppColors } from "@/constants/colors";
 
 type Step = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
@@ -17,15 +18,160 @@ interface VotingFlowProps {
   onVoteSuccess?: () => Promise<void> | void;
 }
 
-const STEPS = [
-  "بيانات سند",
-  "التحقق من الهوية",
-  "الحزب الوطني",
-  "القائمة المحلية",
-  "مرشحو القائمة",
-  "المراجعة",
-  "تم"
-];
+const votingCopy = {
+  ar: {
+    steps: ["بيانات الناخب", "التحقق من الهوية", "الحزب الوطني", "القائمة المحلية", "مرشحو القائمة", "المراجعة", "تم"],
+    user: "المستخدم",
+    errors: {
+      noElection: "لا يوجد انتخاب مرتبط بصفحة التصويت حاليًا.",
+      badNationalId: "تعذر قراءة الرقم الوطني من جلسة صوتك الحالية.",
+      noValidElection: "لا يوجد انتخاب صالح لإرسال التصويت.",
+      chooseParty: "اختر حزبًا وطنيًا واحدًا قبل المتابعة.",
+      chooseList: "اختر قائمة محلية واحدة من دائرتك.",
+      chooseCandidate: "اختر مرشحًا واحدًا على الأقل من القائمة المحلية المحددة.",
+      noToken: "رمز الاقتراع غير متاح. أعد التحقق من الهوية أولًا.",
+      verifyFailed: "فشل التحقق من الهوية.",
+      submitFailed: "تعذر إرسال الصوت. حاول مرة أخرى."
+    },
+    messages: {
+      noOptions: "تم التحقق التجريبي، لكن لا توجد أحزاب أو قوائم محلية جاهزة لهذا الانتخاب.",
+      noParties: "تم التحقق التجريبي، لكن لا توجد أحزاب وطنية متاحة في هذا الانتخاب.",
+      noLists: "تم التحقق التجريبي، لكن لا توجد قوائم محلية متاحة لدائرتك.",
+      verified: "تمت مقارنة صورة الوجه التجريبية مع بيانات الهوية في صوتك وإصدار رمز الاقتراع بنجاح."
+    },
+    noElectionTitle: "لا يوجد انتخاب متاح الآن",
+    noElectionDescription: "سيتم تفعيل التصويت هنا عند ربطك بانتخاب نشط أو مجدول.",
+    heroKicker: "مرحبًا بك في التصويت الإلكتروني",
+    heroDescription: "تم التعرف عليك من خلال حساب صوتك المرتبط بالرقم الوطني المستخدم في تسجيل الدخول.",
+    currentElection: "الانتخاب الحالي",
+    accountName: "الاسم المرتبط بالحساب",
+    nationalId: "الرقم الوطني",
+    sessionStatus: "حالة الجلسة",
+    verifiedViaSoutak: "موثقة عبر صوتك",
+    continueVerify: "متابعة إلى التحقق من الهوية",
+    identityTitle: "التحقق من الهوية",
+    identityDescription: "في هذه الخطوة نستخدم التحقق التجريبي لإصدار رمز الاقتراع وربطك بخيارات التصويت الخاصة بانتخابك.",
+    faceLabel: "صورة الوجه التجريبية المستخدمة للتحقق",
+    faceNote: "مطابقة تجريبية مع بيانات جلسة صوتك الحالية",
+    verifyNote: "التحقق هنا تجريبي الآن، ويتم اعتماد إصدار رمز الاقتراع على جلسة صوتك الحالية.",
+    scorePrefix: "درجة المطابقة الحالية",
+    back: "رجوع",
+    verifying: "جارٍ التحقق...",
+    startVerify: "بدء التحقق التجريبي",
+    partyTitle: "أولًا: التصويت للحزب الوطني",
+    partyDescription: "اختر حزبًا وطنيًا واحدًا فقط على مستوى المملكة.",
+    defaultPartyDescription: "حزب وطني مشارك في هذا الانتخاب",
+    noPartiesWarning: "لا توجد أحزاب وطنية متاحة لهذا الانتخاب.",
+    nextLocalList: "التالي: القائمة المحلية",
+    listTitle: "ثانيًا: اختيار القائمة المحلية",
+    listDescription: "تظهر هنا فقط القوائم التابعة لدائرتك",
+    unknownDistrict: "غير محددة",
+    defaultListDescription: "قائمة محلية ضمن دائرة الناخب",
+    localDistrict: "دائرة محلية",
+    candidateUnit: "مرشح",
+    noListsWarning: "لا توجد قوائم محلية متاحة لدائرتك في هذا الانتخاب.",
+    nextCandidates: "التالي: مرشحو القائمة",
+    candidatesTitle: "ثالثًا: اختيار مرشحي القائمة",
+    candidatesDescription: "يمكنك اختيار",
+    candidatesDescriptionSuffix: "مرشح كحد أقصى من نفس القائمة فقط.",
+    selectedList: "القائمة المختارة",
+    noListSelected: "لم يتم اختيار قائمة بعد",
+    order: "الترتيب",
+    number: "الرقم",
+    noCandidatesWarning: "لا يوجد مرشحون داخل القائمة المختارة، أو لم يتم اختيار قائمة بعد.",
+    reviewChoices: "مراجعة الاختيارات",
+    reviewTitle: "مراجعة نهائية قبل الإرسال",
+    voter: "الناخب",
+    party: "الحزب الوطني",
+    list: "القائمة المحلية",
+    notSelected: "غير محدد",
+    notSelectedFeminine: "غير محددة",
+    selectedCandidates: "مرشحو القائمة المحلية المختارون",
+    submitVote: "تأكيد وإرسال الصوت",
+    successTitle: "تم تسجيل صوتك بنجاح",
+    successDescription: "تم حفظ الصوت بشكل مجهول وربط الجلسة فقط بمعاملة التصويت.",
+    thankYou: "شكرًا",
+    confirmationCode: "رمز تأكيد التصويت",
+    confirmationHint: "احتفظ بهذا الرمز لمراجعة حالة العملية لاحقًا",
+    viewResults: "عرض النتائج"
+  },
+  en: {
+    steps: ["Voter Info", "Identity Check", "National Party", "Local List", "List Candidates", "Review", "Done"],
+    user: "User",
+    errors: {
+      noElection: "No election is currently linked to this voting page.",
+      badNationalId: "Could not read the national ID from your current Soutak session.",
+      noValidElection: "There is no valid election for submitting a vote.",
+      chooseParty: "Choose one national party before continuing.",
+      chooseList: "Choose one local list from your district.",
+      chooseCandidate: "Choose at least one candidate from the selected local list.",
+      noToken: "The voting token is not available. Verify your identity first.",
+      verifyFailed: "Identity verification failed.",
+      submitFailed: "Could not submit your vote. Try again."
+    },
+    messages: {
+      noOptions: "Verification succeeded, but no parties or local lists are ready for this election.",
+      noParties: "Verification succeeded, but no national parties are available in this election.",
+      noLists: "Verification succeeded, but no local lists are available for your district.",
+      verified: "The demo face check matched your Soutak identity data and issued a voting token successfully."
+    },
+    noElectionTitle: "No election available now",
+    noElectionDescription: "Voting will be enabled here when an active or scheduled election is linked to you.",
+    heroKicker: "Welcome to digital voting",
+    heroDescription: "You were identified through your Soutak account linked to the national ID used at sign-in.",
+    currentElection: "Current election",
+    accountName: "Account name",
+    nationalId: "National ID",
+    sessionStatus: "Session status",
+    verifiedViaSoutak: "Verified through Soutak",
+    continueVerify: "Continue to identity check",
+    identityTitle: "Identity Check",
+    identityDescription: "This step uses demo verification to issue a voting token and connect you to your election options.",
+    faceLabel: "Demo face image used for verification",
+    faceNote: "Demo match with your current Soutak session data",
+    verifyNote: "Verification is currently a demo, and the voting token is issued from your active Soutak session.",
+    scorePrefix: "Current match score",
+    back: "Back",
+    verifying: "Verifying...",
+    startVerify: "Start demo verification",
+    partyTitle: "First: Vote for the national party",
+    partyDescription: "Choose exactly one national party at the kingdom level.",
+    defaultPartyDescription: "National party participating in this election",
+    noPartiesWarning: "No national parties are available for this election.",
+    nextLocalList: "Next: Local list",
+    listTitle: "Second: Choose the local list",
+    listDescription: "Only lists assigned to your district appear here",
+    unknownDistrict: "Not specified",
+    defaultListDescription: "Local list in the voter's district",
+    localDistrict: "Local district",
+    candidateUnit: "candidate",
+    noListsWarning: "No local lists are available for your district in this election.",
+    nextCandidates: "Next: List candidates",
+    candidatesTitle: "Third: Choose list candidates",
+    candidatesDescription: "You can choose up to",
+    candidatesDescriptionSuffix: "candidate(s) from the same list.",
+    selectedList: "Selected list",
+    noListSelected: "No list selected yet",
+    order: "Order",
+    number: "Number",
+    noCandidatesWarning: "There are no candidates inside the selected list, or no list has been selected yet.",
+    reviewChoices: "Review choices",
+    reviewTitle: "Final review before submission",
+    voter: "Voter",
+    party: "National party",
+    list: "Local list",
+    notSelected: "Not selected",
+    notSelectedFeminine: "Not selected",
+    selectedCandidates: "Selected local list candidates",
+    submitVote: "Confirm and submit vote",
+    successTitle: "Your vote was recorded successfully",
+    successDescription: "The vote was saved anonymously and the session was linked only to the voting transaction.",
+    thankYou: "Thank you",
+    confirmationCode: "Vote confirmation code",
+    confirmationHint: "Keep this code to review the operation status later",
+    viewResults: "View results"
+  }
+} as const;
 
 export function VotingFlow({
   electionId,
@@ -35,6 +181,9 @@ export function VotingFlow({
   onVoteSuccess
 }: VotingFlowProps) {
   const queryClient = useQueryClient();
+  const { colors, theme, language } = useAppPreferences();
+  const styles = useMemo(() => createStyles(colors, theme), [colors, theme]);
+  const t = votingCopy[language];
   const [step, setStep] = useState<Step>(0);
   const [isVerifying, setIsVerifying] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -46,8 +195,9 @@ export function VotingFlow({
   const [selectedParty, setSelectedParty] = useState<string | null>(null);
   const [selectedDistrictList, setSelectedDistrictList] = useState<string | null>(null);
   const [selectedDistrictCandidates, setSelectedDistrictCandidates] = useState<string[]>([]);
+  const [confirmationCode, setConfirmationCode] = useState<string | null>(null);
 
-  const displayName = voterName?.trim() || "المستخدم";
+  const displayName = voterName?.trim() || t.user;
   const normalizedNationalId = (nationalId || "").trim();
   const parties = ballotOptions?.parties || [];
   const districtLists = ballotOptions?.districtLists || [];
@@ -70,6 +220,7 @@ export function VotingFlow({
     setSelectedParty(null);
     setSelectedDistrictList(null);
     setSelectedDistrictCandidates([]);
+    setConfirmationCode(null);
   }, [electionId]);
 
   const clearFeedback = () => {
@@ -79,12 +230,12 @@ export function VotingFlow({
 
   const handleVerify = async () => {
     if (!electionId) {
-      setError("لا يوجد انتخاب مرتبط بصفحة التصويت حاليًا.");
+      setError(t.errors.noElection);
       return;
     }
 
     if (normalizedNationalId.length !== 10) {
-      setError("تعذر قراءة الرقم الوطني من جلسة سند الحالية.");
+      setError(t.errors.badNationalId);
       return;
     }
 
@@ -106,18 +257,18 @@ export function VotingFlow({
       const missingDistrictLists = !options.districtLists?.length;
 
       if (missingParties && missingDistrictLists) {
-        setMessage("تم التحقق التجريبي، لكن لا توجد أحزاب أو قوائم محلية جاهزة لهذا الانتخاب.");
+        setMessage(t.messages.noOptions);
       } else if (missingParties) {
-        setMessage("تم التحقق التجريبي، لكن لا توجد أحزاب وطنية متاحة في هذا الانتخاب.");
+        setMessage(t.messages.noParties);
       } else if (missingDistrictLists) {
-        setMessage("تم التحقق التجريبي، لكن لا توجد قوائم محلية متاحة لدائرتك.");
+        setMessage(t.messages.noLists);
       } else {
-        setMessage("تمت مقارنة صورة الوجه التجريبية مع صورة الوجه في سند وإصدار رمز الاقتراع بنجاح.");
+        setMessage(t.messages.verified);
       }
 
       setStep(2);
     } catch (verifyError) {
-      setError(verifyError instanceof Error ? verifyError.message : "فشل التحقق من الهوية.");
+      setError(verifyError instanceof Error ? verifyError.message : t.errors.verifyFailed);
       setVerificationScore(null);
     } finally {
       setIsVerifying(false);
@@ -140,27 +291,27 @@ export function VotingFlow({
 
   const handleSubmit = async () => {
     if (!electionId) {
-      setError("لا يوجد انتخاب صالح لإرسال التصويت.");
+      setError(t.errors.noValidElection);
       return;
     }
 
     if (!selectedParty) {
-      setError("اختر حزبًا وطنيًا واحدًا قبل المتابعة.");
+      setError(t.errors.chooseParty);
       return;
     }
 
     if (!selectedDistrictList) {
-      setError("اختر قائمة محلية واحدة من دائرتك.");
+      setError(t.errors.chooseList);
       return;
     }
 
     if (!selectedDistrictCandidates.length) {
-      setError("اختر مرشحًا واحدًا على الأقل من القائمة المحلية المحددة.");
+      setError(t.errors.chooseCandidate);
       return;
     }
 
     if (!votingToken) {
-      setError("رمز الاقتراع غير متاح. أعد التحقق من الهوية أولًا.");
+      setError(t.errors.noToken);
       return;
     }
 
@@ -186,9 +337,10 @@ export function VotingFlow({
       ]);
 
       await onVoteSuccess?.();
+      setConfirmationCode(buildConfirmationCode(electionId, votingToken));
       setStep(6);
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "تعذر إرسال الصوت. حاول مرة أخرى.");
+      setError(submitError instanceof Error ? submitError.message : t.errors.submitFailed);
     } finally {
       setIsSubmitting(false);
     }
@@ -198,7 +350,7 @@ export function VotingFlow({
     <View style={styles.wrapper}>
       <View style={styles.stepperCard}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.stepperScroll}>
-          {STEPS.map((label, index) => (
+          {t.steps.map((label, index) => (
             <View key={`${label}-${index}`} style={styles.stepItem}>
               <View
                 style={[
@@ -244,8 +396,8 @@ export function VotingFlow({
 
       {!electionId ? (
         <View style={styles.card}>
-          <Text style={styles.title}>لا يوجد انتخاب متاح الآن</Text>
-          <Text style={styles.description}>سيتم تفعيل التصويت هنا عند ربطك بانتخاب نشط أو مجدول.</Text>
+          <Text style={styles.title}>{t.noElectionTitle}</Text>
+          <Text style={styles.description}>{t.noElectionDescription}</Text>
         </View>
       ) : null}
 
@@ -253,12 +405,12 @@ export function VotingFlow({
         <View style={styles.card}>
           <View style={styles.heroCard}>
             <View style={styles.heroText}>
-              <Text style={styles.heroKicker}>مرحبًا بك في التصويت الإلكتروني</Text>
+              <Text style={styles.heroKicker}>{t.heroKicker}</Text>
               <Text style={styles.heroName}>{displayName}</Text>
               <Text style={styles.heroDescription}>
-                تم التعرف عليك من خلال حساب سند المرتبط بالرقم الوطني المستخدم في تسجيل الدخول.
+                {t.heroDescription}
               </Text>
-              {electionTitle ? <Text style={styles.heroMeta}>الانتخاب الحالي: {electionTitle}</Text> : null}
+              {electionTitle ? <Text style={styles.heroMeta}>{t.currentElection}: {electionTitle}</Text> : null}
             </View>
             <View style={styles.heroIcon}>
               <MaterialCommunityIcons name="badge-account" size={28} color="#fff" />
@@ -267,16 +419,16 @@ export function VotingFlow({
 
           <View style={styles.infoGrid}>
             <View style={styles.infoBox}>
-              <Text style={styles.infoLabel}>الاسم المرتبط بسند</Text>
+              <Text style={styles.infoLabel}>{t.accountName}</Text>
               <Text style={styles.infoValue}>{displayName}</Text>
             </View>
             <View style={styles.infoBox}>
-              <Text style={styles.infoLabel}>الرقم الوطني</Text>
+              <Text style={styles.infoLabel}>{t.nationalId}</Text>
               <Text style={styles.infoMono}>{normalizedNationalId || "—"}</Text>
             </View>
             <View style={[styles.infoBox, styles.infoBoxWide]}>
-              <Text style={styles.infoLabel}>حالة الجلسة</Text>
-              <Text style={styles.infoStatus}>موثقة عبر سند</Text>
+              <Text style={styles.infoLabel}>{t.sessionStatus}</Text>
+              <Text style={styles.infoStatus}>{t.verifiedViaSoutak}</Text>
             </View>
           </View>
 
@@ -287,7 +439,7 @@ export function VotingFlow({
               setStep(1);
             }}
           >
-            <Text style={styles.primaryButtonText}>متابعة إلى التحقق من الهوية</Text>
+            <Text style={styles.primaryButtonText}>{t.continueVerify}</Text>
             <MaterialCommunityIcons name="arrow-left" size={18} color="#fff" />
           </TouchableOpacity>
         </View>
@@ -297,37 +449,38 @@ export function VotingFlow({
         <View style={styles.card}>
           <View style={styles.rowTitle}>
             <MaterialCommunityIcons name="fingerprint" size={24} color={colors.primaryLight} />
-            <Text style={styles.title}>التحقق من الهوية</Text>
+            <Text style={styles.title}>{t.identityTitle}</Text>
           </View>
 
           <Text style={styles.description}>
-            في هذه الخطوة نستخدم التحقق التجريبي لإصدار رمز الاقتراع وربطك بخيارات التصويت الخاصة بانتخابك.
+            {t.identityDescription}
           </Text>
 
           <View style={styles.faceCard}>
-            <Text style={styles.faceLabel}>صورة الوجه التجريبية المستخدمة للتحقق</Text>
+            <Text style={styles.faceLabel}>{t.faceLabel}</Text>
             <View style={styles.faceCircle}>
+              <View style={styles.scanLine} />
               <MaterialCommunityIcons name="account" size={56} color="#fff" />
             </View>
             <Text style={styles.faceName}>{displayName}</Text>
-            <Text style={styles.faceNote}>مطابقة تجريبية مع بيانات جلسة سند الحالية</Text>
+            <Text style={styles.faceNote}>{t.faceNote}</Text>
           </View>
 
           <View style={styles.noteCard}>
             <Text style={styles.noteText}>
-              التحقق هنا تجريبي الآن، ويتم اعتماد إصدار رمز الاقتراع على جلسة سند الحالية.
+              {t.verifyNote}
             </Text>
           </View>
 
           {verificationScore !== null ? (
             <View style={styles.scoreCard}>
-              <Text style={styles.scoreText}>درجة المطابقة الحالية: {verificationScore}%</Text>
+              <Text style={styles.scoreText}>{t.scorePrefix}: {verificationScore}%</Text>
             </View>
           ) : null}
 
           <View style={styles.actionsColumn}>
             <TouchableOpacity style={styles.secondaryButton} onPress={() => setStep(0)}>
-              <Text style={styles.secondaryButtonText}>رجوع</Text>
+              <Text style={styles.secondaryButtonText}>{t.back}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.primaryButton, isVerifying && styles.disabledButton]}
@@ -340,7 +493,7 @@ export function VotingFlow({
                 <MaterialCommunityIcons name="auto-fix" size={18} color="#fff" />
               )}
               <Text style={styles.primaryButtonText}>
-                {isVerifying ? "جارٍ التحقق..." : "بدء التحقق التجريبي"}
+                {isVerifying ? t.verifying : t.startVerify}
               </Text>
             </TouchableOpacity>
           </View>
@@ -348,13 +501,13 @@ export function VotingFlow({
       ) : null}
 
       {electionId && step === 2 ? (
-        <View style={styles.card}>
+        <View style={[styles.card, styles.reviewCard]}>
           <View style={styles.rowTitle}>
             <MaterialCommunityIcons name="vote" size={24} color={colors.primaryLight} />
-            <Text style={styles.title}>أولًا: التصويت للحزب الوطني</Text>
+            <Text style={styles.title}>{t.partyTitle}</Text>
           </View>
 
-          <Text style={styles.description}>اختر حزبًا وطنيًا واحدًا فقط على مستوى المملكة.</Text>
+          <Text style={styles.description}>{t.partyDescription}</Text>
 
           {parties.length ? (
             <View style={styles.optionsColumn}>
@@ -375,10 +528,17 @@ export function VotingFlow({
                         <View style={styles.optionCheckEmpty} />
                       )}
                     </View>
+                    <EntityAvatar
+                      styles={styles}
+                      colors={colors}
+                      type="party"
+                      title={party.name}
+                      imageUrl={getEntityImage(party, "party")}
+                    />
                     <View style={styles.optionText}>
                       <Text style={styles.optionTitle}>{party.name}</Text>
                       <Text style={styles.optionSubtitle}>
-                        {party.description || "حزب وطني مشارك في هذا الانتخاب"}
+                        {party.description || t.defaultPartyDescription}
                       </Text>
                     </View>
                   </View>
@@ -387,16 +547,16 @@ export function VotingFlow({
             </View>
           ) : (
             <View style={styles.warningCard}>
-              <Text style={styles.warningText}>لا توجد أحزاب وطنية متاحة لهذا الانتخاب.</Text>
+              <Text style={styles.warningText}>{t.noPartiesWarning}</Text>
             </View>
           )}
 
           <View style={styles.actionsColumn}>
             <TouchableOpacity style={styles.secondaryButton} onPress={() => setStep(1)}>
-              <Text style={styles.secondaryButtonText}>رجوع</Text>
+              <Text style={styles.secondaryButtonText}>{t.back}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.primaryButton} onPress={() => setStep(3)}>
-              <Text style={styles.primaryButtonText}>التالي: القائمة المحلية</Text>
+              <Text style={styles.primaryButtonText}>{t.nextLocalList}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -406,11 +566,11 @@ export function VotingFlow({
         <View style={styles.card}>
           <View style={styles.rowTitle}>
             <MaterialCommunityIcons name="format-list-bulleted" size={24} color={colors.primaryLight} />
-            <Text style={styles.title}>ثانيًا: اختيار القائمة المحلية</Text>
+            <Text style={styles.title}>{t.listTitle}</Text>
           </View>
 
           <Text style={styles.description}>
-            تظهر هنا فقط القوائم التابعة لدائرتك: {ballotOptions?.voterDistrict?.name || "غير محددة"}.
+            {t.listDescription}: {ballotOptions?.voterDistrict?.name || t.unknownDistrict}.
           </Text>
 
           {districtLists.length ? (
@@ -427,30 +587,39 @@ export function VotingFlow({
                     setSelectedDistrictCandidates([]);
                   }}
                 >
-                  <View style={styles.optionText}>
-                    <Text style={styles.optionTitle}>{list.name}</Text>
-                    <Text style={styles.optionSubtitle}>
-                      {list.description || "قائمة محلية ضمن دائرة الناخب"}
-                    </Text>
-                    <Text style={styles.optionMeta}>
-                      {list.districtName || "دائرة محلية"} - {list.candidates?.length || 0} مرشح
-                    </Text>
+                  <View style={styles.optionHeader}>
+                    <EntityAvatar
+                      styles={styles}
+                      colors={colors}
+                      type="list"
+                      title={list.name}
+                      imageUrl={getEntityImage(list, "list")}
+                    />
+                    <View style={styles.optionText}>
+                      <Text style={styles.optionTitle}>{list.name}</Text>
+                      <Text style={styles.optionSubtitle}>
+                        {list.description || t.defaultListDescription}
+                      </Text>
+                      <Text style={styles.optionMeta}>
+                        {list.districtName || t.localDistrict} - {list.candidates?.length || 0} {t.candidateUnit}
+                      </Text>
+                    </View>
                   </View>
                 </TouchableOpacity>
               ))}
             </View>
           ) : (
             <View style={styles.warningCard}>
-              <Text style={styles.warningText}>لا توجد قوائم محلية متاحة لدائرتك في هذا الانتخاب.</Text>
+              <Text style={styles.warningText}>{t.noListsWarning}</Text>
             </View>
           )}
 
           <View style={styles.actionsColumn}>
             <TouchableOpacity style={styles.secondaryButton} onPress={() => setStep(2)}>
-              <Text style={styles.secondaryButtonText}>رجوع</Text>
+              <Text style={styles.secondaryButtonText}>{t.back}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.primaryButton} onPress={() => setStep(4)}>
-              <Text style={styles.primaryButtonText}>التالي: مرشحو القائمة</Text>
+              <Text style={styles.primaryButtonText}>{t.nextCandidates}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -460,16 +629,16 @@ export function VotingFlow({
         <View style={styles.card}>
           <View style={styles.rowTitle}>
             <MaterialCommunityIcons name="account-group" size={24} color={colors.primaryLight} />
-            <Text style={styles.title}>ثالثًا: اختيار مرشحي القائمة</Text>
+            <Text style={styles.title}>{t.candidatesTitle}</Text>
           </View>
 
           <Text style={styles.description}>
-            يمكنك اختيار {selectionLimit} مرشح كحد أقصى من نفس القائمة فقط.
+            {t.candidatesDescription} {selectionLimit} {t.candidatesDescriptionSuffix}
           </Text>
 
           <View style={styles.noteCard}>
             <Text style={styles.noteText}>
-              القائمة المختارة: {selectedList?.name || "لم يتم اختيار قائمة بعد"}
+              {t.selectedList}: {selectedList?.name || t.noListSelected}
             </Text>
           </View>
 
@@ -487,6 +656,13 @@ export function VotingFlow({
                     ]}
                     onPress={() => toggleCandidate(candidate.id)}
                   >
+                    <EntityAvatar
+                      styles={styles}
+                      colors={colors}
+                      type="candidate"
+                      title={candidate.fullName}
+                      imageUrl={getEntityImage(candidate, "candidate")}
+                    />
                     <View style={styles.candidateBadge}>
                       {isSelected ? (
                         <MaterialCommunityIcons name="check" size={18} color="#fff" />
@@ -497,8 +673,8 @@ export function VotingFlow({
                     <View style={styles.optionText}>
                       <Text style={styles.optionTitle}>{candidate.fullName}</Text>
                       <Text style={styles.optionSubtitle}>
-                        الترتيب {candidate.candidateOrder}
-                        {candidate.candidateNumber ? ` - الرقم ${candidate.candidateNumber}` : ""}
+                        {t.order} {candidate.candidateOrder}
+                        {candidate.candidateNumber ? ` - ${t.number} ${candidate.candidateNumber}` : ""}
                       </Text>
                     </View>
                   </TouchableOpacity>
@@ -508,17 +684,17 @@ export function VotingFlow({
           ) : (
             <View style={styles.warningCard}>
               <Text style={styles.warningText}>
-                لا يوجد مرشحون داخل القائمة المختارة، أو لم يتم اختيار قائمة بعد.
+                {t.noCandidatesWarning}
               </Text>
             </View>
           )}
 
           <View style={styles.actionsColumn}>
             <TouchableOpacity style={styles.secondaryButton} onPress={() => setStep(3)}>
-              <Text style={styles.secondaryButtonText}>رجوع</Text>
+              <Text style={styles.secondaryButtonText}>{t.back}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.primaryButton} onPress={() => setStep(5)}>
-              <Text style={styles.primaryButtonText}>مراجعة الاختيارات</Text>
+              <Text style={styles.primaryButtonText}>{t.reviewChoices}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -528,36 +704,44 @@ export function VotingFlow({
         <View style={styles.card}>
           <View style={styles.rowTitle}>
             <MaterialCommunityIcons name="shield-check" size={24} color={colors.primaryLight} />
-            <Text style={styles.title}>مراجعة نهائية قبل الإرسال</Text>
+            <Text style={styles.title}>{t.reviewTitle}</Text>
           </View>
 
           <View style={styles.reviewGrid}>
             <View style={styles.reviewBox}>
-              <Text style={styles.infoLabel}>الناخب</Text>
+              <Text style={styles.infoLabel}>{t.voter}</Text>
               <Text style={styles.reviewValue}>{displayName}</Text>
             </View>
             <View style={styles.reviewBox}>
-              <Text style={styles.infoLabel}>الرقم الوطني</Text>
+              <Text style={styles.infoLabel}>{t.nationalId}</Text>
               <Text style={styles.reviewValue}>{normalizedNationalId}</Text>
             </View>
             <View style={styles.reviewBox}>
-              <Text style={styles.infoLabel}>الحزب الوطني</Text>
+              <Text style={styles.infoLabel}>{t.party}</Text>
               <Text style={styles.reviewValue}>
-                {parties.find((party: any) => party.id === selectedParty)?.name || "غير محدد"}
+                {parties.find((party: any) => party.id === selectedParty)?.name || t.notSelected}
               </Text>
             </View>
             <View style={styles.reviewBox}>
-              <Text style={styles.infoLabel}>القائمة المحلية</Text>
-              <Text style={styles.reviewValue}>{selectedList?.name || "غير محددة"}</Text>
+              <Text style={styles.infoLabel}>{t.list}</Text>
+              <Text style={styles.reviewValue}>{selectedList?.name || t.notSelectedFeminine}</Text>
             </View>
           </View>
 
           <View style={styles.reviewCandidatesBox}>
-            <Text style={styles.infoLabel}>مرشحو القائمة المحلية المختارون</Text>
+            <Text style={styles.infoLabel}>{t.selectedCandidates}</Text>
             {(selectedList?.candidates || [])
               .filter((candidate: any) => selectedDistrictCandidates.includes(candidate.id))
               .map((candidate: any) => (
                 <View key={candidate.id} style={styles.reviewCandidateItem}>
+                  <EntityAvatar
+                    styles={styles}
+                    colors={colors}
+                    type="candidate"
+                    title={candidate.fullName}
+                    imageUrl={getEntityImage(candidate, "candidate")}
+                    compact
+                  />
                   <Text style={styles.reviewCandidateName}>{candidate.fullName}</Text>
                 </View>
               ))}
@@ -565,7 +749,7 @@ export function VotingFlow({
 
           <View style={styles.actionsColumn}>
             <TouchableOpacity style={styles.secondaryButton} onPress={() => setStep(4)}>
-              <Text style={styles.secondaryButtonText}>رجوع</Text>
+              <Text style={styles.secondaryButtonText}>{t.back}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.submitButton, isSubmitting && styles.disabledButton]}
@@ -577,7 +761,7 @@ export function VotingFlow({
               ) : (
                 <MaterialCommunityIcons name="check-circle" size={18} color="#fff" />
               )}
-              <Text style={styles.primaryButtonText}>تأكيد وإرسال الصوت</Text>
+              <Text style={styles.primaryButtonText}>{t.submitVote}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -588,10 +772,15 @@ export function VotingFlow({
           <View style={styles.successCircle}>
             <MaterialCommunityIcons name="check" size={46} color="#fff" />
           </View>
-          <Text style={styles.successTitle}>تم تسجيل صوتك بنجاح</Text>
+          <Text style={styles.successTitle}>{t.successTitle}</Text>
           <Text style={styles.successDescription}>
-            شكرًا {displayName}. تم حفظ الصوت بشكل مجهول وربط الجلسة فقط بمعاملة التصويت.
+            {t.thankYou} {displayName}. {t.successDescription}
           </Text>
+          <View style={styles.confirmCodeBox}>
+            <Text style={styles.confirmCodeLabel}>{t.confirmationCode}</Text>
+            <Text style={styles.confirmCodeValue}>{confirmationCode || "A7-X9-K2-P4"}</Text>
+            <Text style={styles.confirmCodeHint}>{t.confirmationHint}</Text>
+          </View>
           <TouchableOpacity
             style={styles.resultsButton}
             onPress={() =>
@@ -602,7 +791,7 @@ export function VotingFlow({
             }
           >
             <MaterialCommunityIcons name="chart-bar" size={18} color={colors.primaryLight} />
-            <Text style={styles.resultsButtonText}>عرض النتائج</Text>
+            <Text style={styles.resultsButtonText}>{t.viewResults}</Text>
           </TouchableOpacity>
         </View>
       ) : null}
@@ -610,7 +799,64 @@ export function VotingFlow({
   );
 }
 
-const styles = StyleSheet.create({
+function EntityAvatar({
+  styles,
+  colors,
+  type,
+  title,
+  imageUrl,
+  compact = false
+}: {
+  styles: ReturnType<typeof createStyles>;
+  colors: AppColors;
+  type: "party" | "list" | "candidate";
+  title: string;
+  imageUrl?: string | null;
+  compact?: boolean;
+}) {
+  return (
+    <View style={[styles.entityAvatar, compact && styles.entityAvatarCompact]}>
+      <Image source={{ uri: imageUrl || getGeneratedEntityImage({ name: title }, type) }} style={styles.entityImage} resizeMode="cover" />
+    </View>
+  );
+}
+
+function getEntitySeed(entity: any, type: "party" | "list" | "candidate") {
+  return encodeURIComponent(
+    `${type}-${entity?.id || entity?.nationalId || entity?.candidateNumber || entity?.code || entity?.name || entity?.fullName || "entity"}`
+  );
+}
+
+function getGeneratedEntityImage(entity: any, type: "party" | "list" | "candidate") {
+  const seed = getEntitySeed(entity, type);
+
+  if (type === "candidate") {
+    return `https://i.pravatar.cc/160?u=${seed}`;
+  }
+
+  return `https://api.dicebear.com/9.x/shapes/png?seed=${seed}&backgroundColor=ffffff,dbeafe,e0f2fe&radius=8`;
+}
+
+function getEntityImage(entity: any, type: "party" | "list" | "candidate") {
+  return entity?.photoUrl || entity?.logoUrl || entity?.imageUrl || entity?.avatarUrl || getGeneratedEntityImage(entity, type);
+}
+
+function buildConfirmationCode(electionId: string, votingToken: string) {
+  const source = `${electionId}-${votingToken}-${Date.now()}`;
+  let hash = 0;
+  for (let index = 0; index < source.length; index += 1) {
+    hash = (hash * 31 + source.charCodeAt(index)) >>> 0;
+  }
+
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const chars = Array.from({ length: 8 }, (_, index) => alphabet[(hash >> (index * 4)) & 31]);
+  return `${chars.slice(0, 2).join("")}-${chars.slice(2, 4).join("")}-${chars.slice(4, 6).join("")}-${chars.slice(6, 8).join("")}`;
+}
+
+function createStyles(colors: AppColors, theme: "light" | "dark") {
+  const isLight = theme === "light";
+
+  return StyleSheet.create({
   wrapper: {
     gap: 14
   },
@@ -618,7 +864,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: colors.border
+    borderColor: colors.border,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: isLight ? 0.08 : 0.18,
+    shadowRadius: 18,
+    elevation: 4
   },
   stepperScroll: {
     paddingHorizontal: 14,
@@ -708,7 +959,17 @@ const styles = StyleSheet.create({
     padding: 18,
     gap: 16,
     borderWidth: 1,
-    borderColor: colors.border
+    borderColor: colors.border,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.16,
+    shadowRadius: 20,
+    elevation: 6
+  },
+  reviewCard: {
+    borderColor: colors.accent,
+    shadowColor: colors.primary,
+    shadowOpacity: 0.28
   },
   rowTitle: {
     flexDirection: "row-reverse",
@@ -728,7 +989,9 @@ const styles = StyleSheet.create({
     lineHeight: 22
   },
   heroCard: {
-    backgroundColor: colors.primary,
+    backgroundColor: isLight ? colors.primary : colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: colors.border,
     borderRadius: 18,
     padding: 18,
     flexDirection: "row-reverse",
@@ -820,7 +1083,7 @@ const styles = StyleSheet.create({
   submitButton: {
     minHeight: 52,
     borderRadius: 16,
-    backgroundColor: colors.primaryLight,
+    backgroundColor: colors.success,
     flexDirection: "row-reverse",
     justifyContent: "center",
     alignItems: "center",
@@ -859,7 +1122,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 10,
     borderWidth: 1,
-    borderColor: colors.border
+    borderColor: colors.primary + "66"
   },
   faceLabel: {
     color: colors.text,
@@ -873,7 +1136,24 @@ const styles = StyleSheet.create({
     borderRadius: 56,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: colors.primary
+    backgroundColor: colors.backgroundCard,
+    borderWidth: 2,
+    borderColor: colors.primaryLight,
+    overflow: "hidden",
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.35,
+    shadowRadius: 18,
+    elevation: 8
+  },
+  scanLine: {
+    position: "absolute",
+    left: 16,
+    right: 16,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: colors.success,
+    opacity: 0.82
   },
   faceName: {
     color: colors.text,
@@ -921,7 +1201,12 @@ const styles = StyleSheet.create({
   },
   optionCardSelected: {
     borderColor: colors.primaryLight,
-    backgroundColor: colors.primaryGlow
+    backgroundColor: colors.primaryGlow,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: isLight ? 0.10 : 0.28,
+    shadowRadius: 18,
+    elevation: 5
   },
   optionHeader: {
     flexDirection: "row-reverse",
@@ -994,6 +1279,33 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontWeight: "800"
   },
+  entityAvatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 16,
+    overflow: "hidden",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: 1,
+    flexShrink: 0
+  },
+  entityAvatarCompact: {
+    width: 34,
+    height: 34,
+    borderRadius: 12
+  },
+  entityImage: {
+    width: "100%",
+    height: "100%"
+  },
+  entityInitials: {
+    color: colors.textSoft,
+    fontSize: 9,
+    fontWeight: "900"
+  },
   reviewGrid: {
     flexDirection: "row-reverse",
     flexWrap: "wrap",
@@ -1028,7 +1340,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderWidth: 1,
-    borderColor: colors.border
+    borderColor: colors.border,
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 10
   },
   reviewCandidateName: {
     color: colors.text,
@@ -1044,7 +1359,12 @@ const styles = StyleSheet.create({
     borderRadius: 48,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: colors.success
+    backgroundColor: colors.success,
+    shadowColor: colors.success,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.42,
+    shadowRadius: 24,
+    elevation: 10
   },
   successTitle: {
     color: colors.text,
@@ -1056,6 +1376,32 @@ const styles = StyleSheet.create({
     color: colors.textSoft,
     textAlign: "center",
     lineHeight: 22
+  },
+  confirmCodeBox: {
+    width: "100%",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.success + "55",
+    backgroundColor: isLight ? colors.backgroundCard : "rgba(0, 200, 150, 0.06)",
+    padding: 16,
+    alignItems: "center",
+    gap: 6
+  },
+  confirmCodeLabel: {
+    color: colors.textMuted,
+    fontSize: 12,
+    fontWeight: "700"
+  },
+  confirmCodeValue: {
+    color: colors.success,
+    fontSize: 22,
+    fontWeight: "900",
+    letterSpacing: 3
+  },
+  confirmCodeHint: {
+    color: colors.textMuted,
+    fontSize: 11,
+    textAlign: "center"
   },
   resultsButton: {
     minHeight: 48,
@@ -1074,4 +1420,5 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     fontSize: 15
   }
-});
+  });
+}

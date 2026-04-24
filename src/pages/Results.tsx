@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { BarChart3, Lock, MapPinned, RefreshCw, Trophy, UserRound, Users, Vote } from 'lucide-react';
+import { ArrowDownUp, BarChart3, Lock, MapPinned, RefreshCw, Trophy, UserRound, Users, Vote } from 'lucide-react';
 import { fetchResults } from '../lib/api';
 import { Dashboard } from './Dashboard';
 
@@ -54,10 +54,79 @@ function pickResultsElection(elections: any[], preferredElectionId?: string | nu
   })[0];
 }
 
+type ResultEntityType = 'party' | 'list' | 'candidate';
+
+function getEntitySeed(entity: any, type: ResultEntityType) {
+  return encodeURIComponent(`${type}-${entity?.id || entity?.candidateNumber || entity?.code || entity?.name || entity?.fullName || 'result'}`);
+}
+
+function getGeneratedEntityImage(entity: any, type: ResultEntityType) {
+  const seed = getEntitySeed(entity, type);
+
+  if (type === 'candidate') {
+    return `https://i.pravatar.cc/160?u=${seed}`;
+  }
+
+  return `https://api.dicebear.com/9.x/shapes/png?seed=${seed}&backgroundColor=ffffff,dbeafe,e0f2fe&radius=8`;
+}
+
+function getEntityImage(entity: any, type: ResultEntityType) {
+  const inferredType = entity?.partyName || entity?.candidateOrder ? 'candidate' : type;
+  return entity?.photoUrl || entity?.logoUrl || entity?.imageUrl || entity?.avatarUrl || getGeneratedEntityImage(entity, inferredType);
+}
+
+function ResultAvatar({ entity, fallback = 'ص' }: { entity: any; fallback?: string }) {
+  const imageUrl = getEntityImage(entity, fallback === 'م' ? 'candidate' : fallback === 'ح' ? 'party' : 'list');
+  return (
+    <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 text-sm font-black text-blue-600">
+      {imageUrl ? <img src={imageUrl} alt="" className="h-full w-full object-cover" /> : fallback}
+    </div>
+  );
+}
+
+function ResultsBarChart({
+  rows,
+  maxVotes,
+  fallback,
+  emptyLabel,
+}: {
+  rows: any[];
+  maxVotes: number;
+  fallback: string;
+  emptyLabel: string;
+}) {
+  const topRows = rows.slice(0, 6);
+
+  return (
+    <div className="mt-4 rounded-2xl border border-slate-100 bg-slate-50 p-4 md:mt-6">
+      {topRows.length ? (
+        <div className="flex h-48 items-end justify-end gap-3 overflow-x-auto px-1 pb-2 pt-3">
+          {topRows.map((row) => {
+            const percent = Math.max(8, (Number(row.votes || 0) / Math.max(maxVotes, 1)) * 100);
+            return (
+              <div key={row.id} className="flex min-w-[58px] flex-col items-center gap-2">
+                <div className="text-xs font-black tabular-nums text-slate-700">{row.votes || 0}</div>
+                <div className="flex h-28 w-8 items-end rounded-full bg-white shadow-inner">
+                  <div className="w-full rounded-full bg-blue-600" style={{ height: `${percent}%` }} title={row.name} />
+                </div>
+                <ResultAvatar entity={row} fallback={fallback} />
+                <p className="line-clamp-2 text-center text-[10px] font-bold leading-4 text-slate-500">{row.name}</p>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="py-8 text-center text-sm font-bold text-slate-500">{emptyLabel}</div>
+      )}
+    </div>
+  );
+}
+
 export const Results = ({ isAdmin, setToast, language = 'ar', elections = [], preferredElectionId }: ResultsProps) => {
   const isArabic = language === 'ar';
   const t = (ar: string, en: string) => (isArabic ? ar : en);
   const [view, setView] = React.useState<'general' | 'local'>('general');
+  const [districtSort, setDistrictSort] = React.useState<'highest' | 'lowest' | 'alphabetical'>('highest');
   const [results, setResults] = React.useState<any>(null);
   const [loading, setLoading] = React.useState(false);
 
@@ -123,10 +192,21 @@ export const Results = ({ isAdmin, setToast, language = 'ar', elections = [], pr
       grouped.set(districtName, current);
     }
 
-    return [...grouped.values()].sort((left, right) => right.votes - left.votes || left.name.localeCompare(right.name, 'ar'));
+    return [...grouped.values()];
   }, [results]);
+  const sortedDistrictTurnout = React.useMemo(() => {
+    return [...districtTurnout].sort((left, right) => {
+      if (districtSort === 'lowest') {
+        return left.votes - right.votes || left.name.localeCompare(right.name, 'ar');
+      }
+      if (districtSort === 'alphabetical') {
+        return left.name.localeCompare(right.name, 'ar');
+      }
+      return right.votes - left.votes || left.name.localeCompare(right.name, 'ar');
+    });
+  }, [districtSort, districtTurnout]);
   const votedDistrictsCount = districtTurnout.filter((district: any) => Number(district?.votes || 0) > 0).length;
-  const topDistrict = districtTurnout[0] || null;
+  const topDistrict = [...districtTurnout].sort((left: any, right: any) => right.votes - left.votes)[0] || null;
 
   const maxVotes = React.useMemo(
     () => rows.reduce((highest: number, row: any) => Math.max(highest, Number(row?.votes || 0)), 1),
@@ -212,17 +292,38 @@ export const Results = ({ isAdmin, setToast, language = 'ar', elections = [], pr
 
         <div className="grid grid-cols-1 gap-4 md:gap-6 xl:grid-cols-[1.2fr,0.8fr]">
           <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm text-right md:p-6">
-            <div className="flex items-center gap-2 md:gap-3">
-              <MapPinned className="h-5 w-5 shrink-0 text-emerald-600" />
-              <h3 className="text-base font-black leading-snug text-slate-900 md:text-lg">{t('عدد المصوتين من كل دائرة', 'Voters by district')}</h3>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2 md:gap-3">
+                <MapPinned className="h-5 w-5 shrink-0 text-emerald-600" />
+                <h3 className="text-base font-black leading-snug text-slate-900 md:text-lg">{t('عدد المصوتين من كل دائرة', 'Voters by district')}</h3>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                {[
+                  { key: 'highest' as const, label: t('الأعلى تصويتًا', 'Highest votes') },
+                  { key: 'lowest' as const, label: t('الأقل تصويتًا', 'Lowest votes') },
+                  { key: 'alphabetical' as const, label: t('أبجدي', 'Alphabetical') },
+                ].map((option) => (
+                  <button
+                    key={option.key}
+                    type="button"
+                    onClick={() => setDistrictSort(option.key)}
+                    className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-bold transition ${
+                      districtSort === option.key
+                        ? 'border-blue-200 bg-blue-50 text-blue-700'
+                        : 'border-slate-200 bg-white text-slate-600'
+                    }`}
+                  >
+                    <ArrowDownUp className="h-3.5 w-3.5" />
+                    {option.label}
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div className="mt-4 space-y-2 md:mt-5 md:space-y-3">
-              {districtTurnout.map((district: any) => (
-                <div
-                  key={district.id}
-                  className="rounded-2xl border border-slate-100 bg-slate-50 p-3.5 md:p-4"
-                >
+              {sortedDistrictTurnout.map((district: any) => (
+                <div key={district.id} className="rounded-2xl border border-slate-100 bg-slate-50 p-3.5 md:p-4">
                   <div className="flex items-center justify-between gap-3">
                     <div className="text-left">
                       <p className="text-base font-black tabular-nums text-blue-600 md:text-lg">{district.votes}</p>
@@ -236,7 +337,7 @@ export const Results = ({ isAdmin, setToast, language = 'ar', elections = [], pr
                 </div>
               ))}
 
-              {!districtTurnout.length && (
+              {!sortedDistrictTurnout.length && (
                 <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4 text-sm font-bold text-slate-500">
                   {t('لا توجد بيانات دوائر متاحة بعد.', 'No district data available yet.')}
                 </div>
@@ -342,31 +443,34 @@ export const Results = ({ isAdmin, setToast, language = 'ar', elections = [], pr
               </h3>
             </div>
 
+            <ResultsBarChart
+              rows={rows}
+              maxVotes={maxVotes}
+              fallback={view === 'general' ? 'ح' : 'ق'}
+              emptyLabel={t('لا توجد نتائج متاحة بعد.', 'No results available yet.')}
+            />
+
             <div className="mt-4 space-y-2.5 md:mt-6 md:space-y-3">
               {rows.map((row: any, index: number) => (
-                <div
-                  key={row.id}
-                  className="rounded-2xl border border-slate-100 bg-slate-50 p-3.5 text-right md:p-4"
-                >
+                <div key={row.id} className="rounded-2xl border border-slate-100 bg-slate-50 p-3.5 text-right md:p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="text-left">
                       <p className="text-base font-black tabular-nums text-blue-600 md:text-sm">{row.votes}</p>
-                      {view === 'local' && row.districtName && (
-                        <p className="mt-0.5 text-[11px] text-slate-500 md:text-xs">{row.districtName}</p>
-                      )}
+                      {view === 'local' && row.districtName && <p className="mt-0.5 text-[11px] text-slate-500 md:text-xs">{row.districtName}</p>}
                     </div>
-                    <div className="min-w-0">
-                      <p className="font-black leading-snug text-slate-900">{row.name}</p>
-                      <p className="mt-1 text-[11px] text-slate-500 md:text-xs">{row.code || row.districtName || ''}</p>
+                    <div className="flex min-w-0 flex-1 items-start justify-end gap-3">
+                      <div className="min-w-0">
+                        <p className="font-black leading-snug text-slate-900">{row.name}</p>
+                        <p className="mt-1 text-[11px] text-slate-500 md:text-xs">{row.code || row.districtName || ''}</p>
+                      </div>
+                      <ResultAvatar entity={row} fallback={view === 'general' ? 'ح' : 'ق'} />
                     </div>
                   </div>
 
                   <div className="mt-3 h-2.5 rounded-full bg-slate-200 md:h-2">
                     <div
                       className="h-2.5 rounded-full bg-blue-600 md:h-2"
-                      style={{
-                        width: `${rows.length ? (Number(row.votes || 0) / maxVotes) * 100 : 0}%`,
-                      }}
+                      style={{ width: `${rows.length ? (Number(row.votes || 0) / maxVotes) * 100 : 0}%` }}
                     />
                   </div>
                   <p className="mt-2 text-[11px] font-bold text-slate-400 md:text-xs">{t('الترتيب الحالي', 'Current rank')}: #{index + 1}</p>
@@ -390,9 +494,7 @@ export const Results = ({ isAdmin, setToast, language = 'ar', elections = [], pr
               <div className="mt-4 grid grid-cols-2 gap-3 md:mt-5 md:grid-cols-1 md:gap-4">
                 <div className="rounded-xl bg-slate-50 p-3.5 md:p-4">
                   <p className="text-[10px] text-slate-400 md:text-xs">{t('إجمالي البطاقات المجهولة', 'Total anonymous ballots')}</p>
-                  <p className="mt-1 text-xl font-black tabular-nums text-slate-900 md:mt-2 md:text-2xl">
-                    {results?.totalVotes || 0}
-                  </p>
+                  <p className="mt-1 text-xl font-black tabular-nums text-slate-900 md:mt-2 md:text-2xl">{results?.totalVotes || 0}</p>
                 </div>
                 <div className="rounded-xl bg-slate-50 p-3.5 md:p-4">
                   <p className="text-[10px] text-slate-400 md:text-xs">{t('عدد الكيانات المعروضة', 'Displayed entities')}</p>
@@ -408,11 +510,14 @@ export const Results = ({ isAdmin, setToast, language = 'ar', elections = [], pr
               </div>
               <div className="mt-3 space-y-2 md:mt-4 md:space-y-3">
                 {(results?.partyWinners || []).slice(0, 8).map((winner: any) => (
-                  <div key={winner.id} className="rounded-xl border border-slate-100 bg-slate-50 p-3.5 md:p-4">
-                    <p className="font-black leading-snug text-slate-900">{winner.name}</p>
-                    <p className="mt-1 text-[11px] text-slate-500 md:text-xs">
-                      {winner.partyName} - {t('الترتيب', 'rank')} {winner.candidateOrder}
-                    </p>
+                  <div key={winner.id} className="flex items-center justify-end gap-3 rounded-xl border border-slate-100 bg-slate-50 p-3.5 md:p-4">
+                    <div>
+                      <p className="font-black leading-snug text-slate-900">{winner.name}</p>
+                      <p className="mt-1 text-[11px] text-slate-500 md:text-xs">
+                        {winner.partyName} - {t('الترتيب', 'rank')} {winner.candidateOrder}
+                      </p>
+                    </div>
+                    <ResultAvatar entity={winner} fallback="م" />
                   </div>
                 ))}
 

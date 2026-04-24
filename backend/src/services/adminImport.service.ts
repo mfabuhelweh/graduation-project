@@ -1,6 +1,7 @@
 import * as XLSX from 'xlsx';
 import { query, withTransaction } from '../db/pool.js';
 import { resolveAdminId } from './election.service.js';
+import { createDefaultVoterPasswordHash } from '../utils/password.js';
 
 export const IMPORT_FILE_ORDER = [
   'districts',
@@ -13,7 +14,7 @@ export const IMPORT_FILE_ORDER = [
 ] as const;
 
 export const IMPORT_TEMPLATES: Record<string, string[]> = {
-  districts: ['district_name', 'district_code', 'seats_count'],
+  districts: ['district_name', 'governorate_name', 'district_code', 'seats_count'],
   quotas: ['district_code', 'quota_name', 'description'],
   parties: ['party_name', 'party_code', 'logo_url', 'description'],
   party_candidates: [
@@ -37,7 +38,7 @@ export const IMPORT_TEMPLATES: Record<string, string[]> = {
     'quota_name',
     'photo_url',
   ],
-  voters: ['district_code', 'full_name', 'national_id', 'gender', 'birth_date', 'phone_number', 'email', 'status'],
+  voters: ['district_code', 'full_name', 'national_id', 'gender', 'birth_date', 'age', 'phone_number', 'email', 'status'],
 };
 
 const DELETION_ORDER = [
@@ -153,6 +154,57 @@ function normalizeDate(value: unknown) {
   return parsed.toISOString().slice(0, 10);
 }
 
+function deriveGovernorateName(value: unknown, districtName: unknown, districtCode: unknown) {
+  const explicitGovernorate = normalizeValue(value);
+  if (explicitGovernorate) return explicitGovernorate;
+
+  const districtNameText = normalizeValue(districtName);
+  const districtCodeText = normalizeValue(districtCode).toUpperCase();
+  const searchable = `${districtNameText} ${districtCodeText}`.toLowerCase();
+
+  if (districtCodeText.startsWith('AMM') || districtNameText.includes('العاصمة') || searchable.includes('amman')) return 'عمان';
+  if (districtCodeText.startsWith('IRB') || districtNameText.includes('إربد') || districtNameText.includes('اربد') || searchable.includes('irbid')) return 'إربد';
+  if (districtCodeText.startsWith('ZAR') || districtNameText.includes('الزرقاء') || searchable.includes('zarqa')) return 'الزرقاء';
+  if (districtCodeText.startsWith('BAL') || districtNameText.includes('البلقاء') || searchable.includes('balqa')) return 'البلقاء';
+  if (districtCodeText.startsWith('KAR') || districtNameText.includes('الكرك') || searchable.includes('karak')) return 'الكرك';
+  if (districtCodeText.startsWith('MAA') || districtNameText.includes('معان') || searchable.includes('maan') || searchable.includes("ma'an")) return 'معان';
+  if (districtCodeText.startsWith('TAF') || districtNameText.includes('الطفيلة') || searchable.includes('tafila')) return 'الطفيلة';
+  if (districtCodeText.startsWith('JER') || districtNameText.includes('جرش') || searchable.includes('jerash')) return 'جرش';
+  if (districtCodeText.startsWith('AJL') || districtNameText.includes('عجلون') || searchable.includes('ajloun')) return 'عجلون';
+  if (districtCodeText.startsWith('MAD') || districtNameText.includes('مادبا') || searchable.includes('madaba')) return 'مادبا';
+  if (districtCodeText.startsWith('AQA') || districtNameText.includes('العقبة') || searchable.includes('aqaba')) return 'العقبة';
+  if (districtCodeText.startsWith('MAF') || districtNameText.includes('المفرق') || searchable.includes('mafraq')) return 'المفرق';
+  if (districtCodeText === 'BADIA_NORTH' || districtNameText.includes('البادية الشمالية') || searchable.includes('badia north')) return 'البادية الشمالية';
+  if (districtCodeText === 'BADIA_CENTER' || districtNameText.includes('البادية الوسطى') || searchable.includes('badia center') || searchable.includes('badia central')) return 'البادية الوسطى';
+  if (districtCodeText === 'BADIA_SOUTH' || districtNameText.includes('البادية الجنوبية') || searchable.includes('badia south')) return 'البادية الجنوبية';
+
+  return districtNameText || null;
+}
+
+function generateRandomGender() {
+  return Math.random() < 0.5 ? 'male' : 'female';
+}
+
+function normalizeAdultAge(value: unknown, birthDate: string | null) {
+  const parsedAge = normalizeInteger(value);
+  if (parsedAge && parsedAge >= 18) return parsedAge;
+
+  if (birthDate) {
+    const birth = new Date(birthDate);
+    if (!Number.isNaN(birth.getTime())) {
+      const today = new Date();
+      let age = today.getFullYear() - birth.getFullYear();
+      const monthDiff = today.getMonth() - birth.getMonth();
+      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+        age -= 1;
+      }
+      if (age >= 18) return age;
+    }
+  }
+
+  return Math.floor(Math.random() * 43) + 19;
+}
+
 async function lookupElectionIdByTitle(client: any, title: string) {
   const result = await client.query(
     `SELECT id
@@ -245,6 +297,11 @@ async function lookupDistrictList(client: any, electionId: string, districtId: s
     [electionId, districtId, listCode],
   );
   return (result.rows[0] as { id: string } | undefined)?.id || null;
+}
+
+async function rowExists(client: any, sql: string, params: unknown[]) {
+  const result = await client.query(sql, params);
+  return Boolean(result.rows[0]);
 }
 
 async function processRows(
@@ -358,6 +415,7 @@ export async function importSpreadsheet(
     case 'districts':
       return processRows(kind, file, actorEmail, selectedElectionId, async (client, row, _rowNumber, _adminId, resolvedElectionId) => {
         const districtName = normalizeValue(row.district_name);
+        const governorateName = deriveGovernorateName(row.governorate_name, row.district_name, row.district_code);
         const districtCode = normalizeValue(row.district_code);
         const seatsCount = normalizeInteger(row.seats_count);
         if (!districtName || !districtCode || !seatsCount) {
@@ -365,13 +423,24 @@ export async function importSpreadsheet(
         }
 
         const electionId = await resolveImportElectionId(client, row, resolvedElectionId);
+        const alreadyExists = await rowExists(
+          client,
+          `SELECT id
+           FROM districts
+           WHERE election_id = $1 AND code = $2
+           LIMIT 1`,
+          [electionId, districtCode],
+        );
+        if (alreadyExists) {
+          throw new Error(`District code "${districtCode}" is already imported for this election`);
+        }
 
         const inserted = await client.query(
-          `INSERT INTO districts (election_id, name, code, seats_count)
-           VALUES ($1, $2, $3, $4)
+          `INSERT INTO districts (election_id, name, governorate_name, code, seats_count)
+           VALUES ($1, $2, $3, $4, $5)
            ON CONFLICT (election_id, code) DO NOTHING
            RETURNING id`,
-          [electionId, districtName, districtCode, seatsCount],
+          [electionId, districtName, governorateName, districtCode, seatsCount],
         );
 
         const id = (inserted.rows[0] as { id: string } | undefined)?.id;
@@ -391,6 +460,22 @@ export async function importSpreadsheet(
           const district = await lookupDistrict(client, electionId, districtCode);
           if (!district) throw new Error(`District "${districtCode}" was not found`);
           districtId = district.id;
+        }
+        const duplicateQuota = await rowExists(
+          client,
+          `SELECT id
+           FROM quotas
+           WHERE election_id = $1
+             AND lower(name) = lower($2)
+             AND (
+               ($3::uuid IS NULL AND district_id IS NULL)
+               OR district_id = $3::uuid
+             )
+           LIMIT 1`,
+          [electionId, quotaName, districtId],
+        );
+        if (duplicateQuota) {
+          throw new Error(`Quota "${quotaName}" already exists in this scope`);
         }
 
         const inserted = await client.query(
@@ -414,6 +499,17 @@ export async function importSpreadsheet(
         }
 
         const electionId = await resolveImportElectionId(client, row, resolvedElectionId);
+        const alreadyExists = await rowExists(
+          client,
+          `SELECT id
+           FROM parties
+           WHERE election_id = $1 AND party_code = $2
+           LIMIT 1`,
+          [electionId, partyCode],
+        );
+        if (alreadyExists) {
+          throw new Error(`Party code "${partyCode}" is already imported for this election`);
+        }
 
         const inserted = await client.query(
           `INSERT INTO parties (election_id, party_name, party_code, logo_url, description)
@@ -442,6 +538,28 @@ export async function importSpreadsheet(
         const partyId = await lookupParty(client, electionId, partyCode);
         if (!partyId) throw new Error(`Party "${partyCode}" was not found`);
         const quotaId = await lookupQuota(client, electionId, null, normalizeNullable(row.quota_name));
+        const duplicateNationalId = await rowExists(
+          client,
+          `SELECT id
+           FROM party_candidates
+           WHERE party_id = $1 AND national_id = $2
+           LIMIT 1`,
+          [partyId, nationalId],
+        );
+        if (duplicateNationalId) {
+          throw new Error(`Duplicate national ID "${nationalId}" in party "${partyCode}" candidates`);
+        }
+        const duplicateOrder = await rowExists(
+          client,
+          `SELECT id
+           FROM party_candidates
+           WHERE party_id = $1 AND candidate_order = $2
+           LIMIT 1`,
+          [partyId, candidateOrder],
+        );
+        if (duplicateOrder) {
+          throw new Error(`Candidate order "${candidateOrder}" is already used inside party "${partyCode}"`);
+        }
 
         const inserted = await client.query(
           `INSERT INTO party_candidates (
@@ -474,6 +592,19 @@ export async function importSpreadsheet(
         const electionId = await resolveImportElectionId(client, row, resolvedElectionId);
         const district = await lookupDistrict(client, electionId, districtCode);
         if (!district) throw new Error(`District "${districtCode}" was not found`);
+        const alreadyExists = await rowExists(
+          client,
+          `SELECT id
+           FROM district_lists
+           WHERE election_id = $1
+             AND district_id = $2
+             AND list_code = $3
+           LIMIT 1`,
+          [electionId, district.id, listCode],
+        );
+        if (alreadyExists) {
+          throw new Error(`List code "${listCode}" is already imported in district "${districtCode}"`);
+        }
 
         const inserted = await client.query(
           `INSERT INTO district_lists (election_id, district_id, list_name, list_code, description)
@@ -511,6 +642,41 @@ export async function importSpreadsheet(
         const districtListId = await lookupDistrictList(client, electionId, district.id, listCode);
         if (!districtListId) throw new Error(`District list "${listCode}" was not found`);
         const quotaId = await lookupQuota(client, electionId, district.id, normalizeNullable(row.quota_name));
+        const duplicateNationalId = await rowExists(
+          client,
+          `SELECT id
+           FROM district_list_candidates
+           WHERE district_list_id = $1 AND national_id = $2
+           LIMIT 1`,
+          [districtListId, nationalId],
+        );
+        if (duplicateNationalId) {
+          throw new Error(`Duplicate national ID "${nationalId}" in district list "${listCode}"`);
+        }
+        const duplicateOrder = await rowExists(
+          client,
+          `SELECT id
+           FROM district_list_candidates
+           WHERE district_list_id = $1 AND candidate_order = $2
+           LIMIT 1`,
+          [districtListId, candidateOrder],
+        );
+        if (duplicateOrder) {
+          throw new Error(`Candidate order "${candidateOrder}" is already used in district list "${listCode}"`);
+        }
+        if (candidateNumber) {
+          const duplicateCandidateNumber = await rowExists(
+            client,
+            `SELECT id
+             FROM district_list_candidates
+             WHERE district_list_id = $1 AND candidate_number = $2
+             LIMIT 1`,
+            [districtListId, candidateNumber],
+          );
+          if (duplicateCandidateNumber) {
+            throw new Error(`Candidate number "${candidateNumber}" is already used in district list "${listCode}"`);
+          }
+        }
 
         const inserted = await client.query(
           `INSERT INTO district_list_candidates (
@@ -545,8 +711,9 @@ export async function importSpreadsheet(
         const districtCode = normalizeValue(row.district_code);
         const fullName = normalizeValue(row.full_name);
         const nationalId = normalizeValue(row.national_id);
-        const gender = normalizeGender(row.gender);
+        const gender = normalizeGender(row.gender) || generateRandomGender();
         const birthDate = normalizeDate(row.birth_date);
+        const age = normalizeAdultAge(row.age, birthDate);
         if (!districtCode || !fullName || !nationalId) {
           throw new Error('district_code, full_name, and national_id are required');
         }
@@ -554,12 +721,24 @@ export async function importSpreadsheet(
         const electionId = await resolveImportElectionId(client, row, resolvedElectionId);
         const district = await lookupDistrict(client, electionId, districtCode);
         if (!district) throw new Error(`District "${districtCode}" was not found`);
+        const duplicateNationalId = await rowExists(
+          client,
+          `SELECT id
+           FROM voters
+           WHERE election_id = $1 AND national_id = $2
+           LIMIT 1`,
+          [electionId, nationalId],
+        );
+        if (duplicateNationalId) {
+          throw new Error(`Duplicate national ID "${nationalId}" already exists in this election`);
+        }
+        const passwordHash = await createDefaultVoterPasswordHash();
 
         const inserted = await client.query(
           `INSERT INTO voters (
-             election_id, district_id, full_name, national_id, gender, birth_date, phone_number, email, status
+             election_id, district_id, full_name, national_id, gender, birth_date, age, phone_number, email, password_hash, status
            )
-           VALUES ($1, $2, $3, $4, $5::candidate_gender, $6::date, $7, $8, $9::voter_status)
+           VALUES ($1, $2, $3, $4, $5::candidate_gender, $6::date, $7, $8, $9, $10, $11::voter_status)
            ON CONFLICT (election_id, national_id) DO NOTHING
            RETURNING id`,
           [
@@ -569,8 +748,10 @@ export async function importSpreadsheet(
             nationalId,
             gender,
             birthDate,
+            age,
             normalizeNullable(row.phone_number),
             normalizeNullable(row.email),
+            passwordHash,
             normalizeVoterStatus(row.status),
           ],
         );

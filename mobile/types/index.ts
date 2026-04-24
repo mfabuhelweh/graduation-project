@@ -57,6 +57,7 @@ export interface BallotCandidate {
   candidateNumber?: number | null;
   gender?: string;
   photoUrl?: string | null;
+  imageUrl?: string | null;
 }
 
 export interface PartyOption {
@@ -64,6 +65,7 @@ export interface PartyOption {
   name: string;
   code?: string;
   logoUrl?: string | null;
+  imageUrl?: string | null;
   description?: string | null;
   candidates: BallotCandidate[];
 }
@@ -77,6 +79,8 @@ export interface DistrictListOption {
   districtName?: string;
   districtCode?: string;
   districtSeatsCount?: number;
+  logoUrl?: string | null;
+  imageUrl?: string | null;
   candidates: BallotCandidate[];
 }
 
@@ -165,6 +169,8 @@ export interface ResultRow {
   name: string;
   code?: string;
   districtName?: string;
+  logoUrl?: string | null;
+  imageUrl?: string | null;
   votes: number;
 }
 
@@ -174,6 +180,8 @@ export interface WinnerRow {
   candidateOrder?: number;
   partyName?: string;
   partyVotes?: number;
+  photoUrl?: string | null;
+  imageUrl?: string | null;
 }
 
 export interface ElectionResults {

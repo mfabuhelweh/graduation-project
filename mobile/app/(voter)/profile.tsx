@@ -9,6 +9,7 @@ import { ScreenContainer } from "@/components/ScreenContainer";
 import { useAppPreferences } from "@/hooks/useAppPreferences";
 import { useAuth } from "@/hooks/useAuth";
 import { useProfile } from "@/hooks/useProfile";
+import { fetchElectionById } from "@/services/api";
 import { saveAuthSession } from "@/services/storage";
 import { useAuthStore } from "@/store/authStore";
 import { usePreferencesStore } from "@/store/preferencesStore";
@@ -66,6 +67,33 @@ export default function ProfileScreen() {
     setTimeout(() => setNotice(null), 2200);
   };
 
+  const handleLogout = async () => {
+    const electionId = user?.electionId;
+    let endAt = "";
+    let electionTitle = "";
+
+    if (electionId) {
+      try {
+        const election = await fetchElectionById(electionId);
+        endAt = election.endAt || election.endDate || "";
+        electionTitle = election.title || "";
+      } catch {
+        // Continue logout even if election details cannot be loaded.
+      }
+    }
+
+    await logout();
+
+    router.replace({
+      pathname: "/(public)/countdown",
+      params: {
+        ...(electionId ? { electionId } : {}),
+        ...(endAt ? { endAt } : {}),
+        ...(electionTitle ? { title: electionTitle } : {})
+      }
+    });
+  };
+
   const saveProfile = async () => {
     const updates = {
       fullName: draft.fullName.trim(),
@@ -118,7 +146,7 @@ export default function ProfileScreen() {
           <MenuButton icon="palette-outline" title={copy.preferences} subtitle={copy.preferencesHint} action={() => setSection("preferences")} />
           <MenuButton icon="lock-outline" title={copy.security} subtitle={copy.securityHint} action={() => setSection("security")} />
           <MenuButton icon="bell-outline" title={copy.notifications} subtitle={copy.notificationsHint} action={() => setSection("notifications")} />
-          <TouchableOpacity style={styles.logout} onPress={async () => { await logout(); router.replace("/(auth)/login"); }}>
+          <TouchableOpacity style={styles.logout} onPress={() => void handleLogout()}>
             <View style={styles.menuText}><Text style={[styles.menuTitle, { color: colors.error }]}>{copy.logout}</Text></View>
             <View style={[styles.menuIcon, { backgroundColor: colors.errorBg }]}><MaterialCommunityIcons name="logout" size={22} color={colors.error} /></View>
           </TouchableOpacity>

@@ -9,6 +9,6 @@ export const voterRoutes = Router();
 voterRoutes.get('/', authMiddleware, adminMiddleware, asyncHandler(getVoters));
 voterRoutes.post('/verify-face', authMiddleware, asyncHandler(postFaceVerification));
 voterRoutes.get('/me', authMiddleware, asyncHandler(getMyVoterProfile));
-voterRoutes.get('/:nationalId', authMiddleware, asyncHandler(getVoter));
+voterRoutes.get('/:nationalId', authMiddleware, adminMiddleware, asyncHandler(getVoter));
 voterRoutes.post('/', authMiddleware, adminMiddleware, asyncHandler(postVoter));
 voterRoutes.patch('/:id', authMiddleware, adminMiddleware, asyncHandler(patchVoter));

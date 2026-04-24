@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Download, RefreshCw, ShieldCheck } from 'lucide-react';
+import { Download, FileText, RefreshCw, Search, ShieldCheck } from 'lucide-react';
 import { fetchAuditLogs } from '../lib/api';
 import { cn } from '../lib/utils';
 
@@ -41,16 +41,10 @@ function formatDetails(details: any) {
   return entries.length ? entries.join(' | ') : '-';
 }
 
-function exportLogs(logs: any[]) {
+function exportLogsCsv(logs: any[]) {
   const headers = ['event', 'actorType', 'actorId', 'time', 'details'];
   const lines = logs.map((log) =>
-    [
-      log.event,
-      log.actorType || '',
-      log.actorId || '',
-      log.time || '',
-      JSON.stringify(log.details || {}),
-    ]
+    [log.event, log.actorType || '', log.actorId || '', log.time || '', JSON.stringify(log.details || {})]
       .map((value) => `"${String(value).replace(/"/g, '""')}"`)
       .join(','),
   );
@@ -66,10 +60,67 @@ function exportLogs(logs: any[]) {
   URL.revokeObjectURL(url);
 }
 
+function exportLogsPdf(logs: any[], language: string) {
+  const popup = window.open('', '_blank', 'noopener,noreferrer,width=1200,height=900');
+  if (!popup) {
+    throw new Error(language === 'ar' ? 'تعذر فتح نافذة التصدير' : 'Could not open export window');
+  }
+
+  const rows = logs
+    .map(
+      (log) => `
+        <tr>
+          <td>${String(log.event || '').replaceAll('_', ' ')}</td>
+          <td>${formatActor(log)}</td>
+          <td>${formatTime(log.time, language)}</td>
+          <td>${formatDetails(log.details)}</td>
+        </tr>`,
+    )
+    .join('');
+
+  popup.document.write(`
+    <html dir="rtl">
+      <head>
+        <title>Audit Logs</title>
+        <style>
+          body { font-family: Arial, sans-serif; padding: 24px; color: #0f172a; }
+          h1 { margin-bottom: 8px; }
+          p { color: #475569; }
+          table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+          th, td { border: 1px solid #cbd5e1; padding: 10px; text-align: right; vertical-align: top; }
+          th { background: #eff6ff; }
+        </style>
+      </head>
+      <body>
+        <h1>${language === 'ar' ? 'سجل العمليات' : 'Audit Logs'}</h1>
+        <p>${language === 'ar' ? 'نسخة جاهزة للطباعة أو الحفظ بصيغة PDF.' : 'Printable copy ready for PDF save.'}</p>
+        <table>
+          <thead>
+            <tr>
+              <th>${language === 'ar' ? 'العملية' : 'Event'}</th>
+              <th>${language === 'ar' ? 'المستخدم' : 'Actor'}</th>
+              <th>${language === 'ar' ? 'الوقت' : 'Time'}</th>
+              <th>${language === 'ar' ? 'التفاصيل' : 'Details'}</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </body>
+    </html>
+  `);
+  popup.document.close();
+  popup.focus();
+  popup.print();
+}
+
 export const AuditLogs = ({ setToast, language }: AuditLogsProps) => {
   const [auditLogs, setAuditLogs] = React.useState<any[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [isRefreshing, setIsRefreshing] = React.useState(false);
+  const [searchQuery, setSearchQuery] = React.useState('');
+  const [actorFilter, setActorFilter] = React.useState('all');
+  const [actionFilter, setActionFilter] = React.useState('all');
+  const [timeFilter, setTimeFilter] = React.useState<'all' | '1h' | '24h' | '7d'>('all');
 
   const loadLogs = React.useCallback(async () => {
     try {
@@ -91,23 +142,77 @@ export const AuditLogs = ({ setToast, language }: AuditLogsProps) => {
     loadLogs();
   }, [loadLogs]);
 
+  const actorOptions = React.useMemo(() => {
+    const actors = new Set(auditLogs.map((log) => formatActor(log)));
+    return ['all', ...Array.from(actors)];
+  }, [auditLogs]);
+
+  const actionOptions = React.useMemo(() => {
+    const actions = new Set(auditLogs.map((log) => String(log.event || '').replaceAll('_', ' ')));
+    return ['all', ...Array.from(actions)];
+  }, [auditLogs]);
+
+  const filteredLogs = React.useMemo(() => {
+    const now = Date.now();
+    return auditLogs.filter((log) => {
+      const actor = formatActor(log);
+      const action = String(log.event || '').replaceAll('_', ' ');
+      const time = formatTime(log.time, language);
+      const details = formatDetails(log.details);
+      const haystack = `${actor} ${action} ${time} ${details}`.toLowerCase();
+      const query = searchQuery.trim().toLowerCase();
+
+      if (query && !haystack.includes(query)) return false;
+      if (actorFilter !== 'all' && actor !== actorFilter) return false;
+      if (actionFilter !== 'all' && action !== actionFilter) return false;
+
+      if (timeFilter !== 'all') {
+        const logTime = new Date(log.time).getTime();
+        if (Number.isNaN(logTime)) return false;
+        const diff = now - logTime;
+        if (timeFilter === '1h' && diff > 60 * 60 * 1000) return false;
+        if (timeFilter === '24h' && diff > 24 * 60 * 60 * 1000) return false;
+        if (timeFilter === '7d' && diff > 7 * 24 * 60 * 60 * 1000) return false;
+      }
+
+      return true;
+    });
+  }, [actionFilter, actorFilter, auditLogs, language, searchQuery, timeFilter]);
+
   const handleRefresh = () => {
     setIsRefreshing(true);
     loadLogs();
   };
 
-  const handleExport = () => {
-    exportLogs(auditLogs);
+  const handleExportCsv = () => {
+    exportLogsCsv(filteredLogs);
     setToast({
-      message: language === 'ar' ? 'تم تصدير سجل العمليات' : 'Audit logs exported',
+      message: language === 'ar' ? 'تم تصدير السجل بصيغة CSV' : 'Audit logs exported as CSV',
       type: 'success',
     });
     setTimeout(() => setToast(null), 2000);
   };
 
+  const handleExportPdf = () => {
+    try {
+      exportLogsPdf(filteredLogs, language);
+      setToast({
+        message: language === 'ar' ? 'تم تجهيز نسخة PDF للطباعة أو الحفظ' : 'PDF export prepared',
+        type: 'success',
+      });
+      setTimeout(() => setToast(null), 2000);
+    } catch (error) {
+      setToast({
+        message: error instanceof Error ? error.message : 'Failed to export PDF',
+        type: 'error',
+      });
+      setTimeout(() => setToast(null), 3000);
+    }
+  };
+
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500" dir="rtl">
-      <div className="flex items-center justify-between flex-row-reverse">
+      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div className="text-right">
           <h2 className="text-2xl font-bold text-slate-900">سجل العمليات</h2>
           <p className="text-sm text-slate-500">
@@ -115,14 +220,23 @@ export const AuditLogs = ({ setToast, language }: AuditLogsProps) => {
           </p>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex flex-wrap justify-end gap-2">
           <button
-            onClick={handleExport}
-            disabled={!auditLogs.length}
+            onClick={handleExportCsv}
+            disabled={!filteredLogs.length}
             className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 font-semibold text-slate-600 shadow-sm transition-colors hover:bg-slate-50 disabled:opacity-50"
           >
             <Download className="h-4 w-4" />
-            تصدير السجل
+            CSV
+          </button>
+
+          <button
+            onClick={handleExportPdf}
+            disabled={!filteredLogs.length}
+            className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 font-semibold text-slate-600 shadow-sm transition-colors hover:bg-slate-50 disabled:opacity-50"
+          >
+            <FileText className="h-4 w-4" />
+            PDF
           </button>
 
           <button
@@ -133,6 +247,56 @@ export const AuditLogs = ({ setToast, language }: AuditLogsProps) => {
             <RefreshCw className={cn('h-4 w-4', isRefreshing && 'animate-spin')} />
             تحديث
           </button>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-[1.4fr,0.8fr,0.8fr,0.8fr]">
+          <label className="relative">
+            <Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder={language === 'ar' ? 'ابحث باسم المستخدم أو العملية أو الوقت' : 'Search by user, action, or time'}
+              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-10 py-3 text-right text-sm focus:border-blue-500 focus:bg-white focus:outline-none"
+            />
+          </label>
+
+          <select
+            value={actorFilter}
+            onChange={(event) => setActorFilter(event.target.value)}
+            className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-right text-sm focus:border-blue-500 focus:bg-white focus:outline-none"
+          >
+            {actorOptions.map((option) => (
+              <option key={option} value={option}>
+                {option === 'all' ? (language === 'ar' ? 'كل المستخدمين' : 'All actors') : option}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={actionFilter}
+            onChange={(event) => setActionFilter(event.target.value)}
+            className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-right text-sm focus:border-blue-500 focus:bg-white focus:outline-none"
+          >
+            {actionOptions.map((option) => (
+              <option key={option} value={option}>
+                {option === 'all' ? (language === 'ar' ? 'كل العمليات' : 'All actions') : option}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={timeFilter}
+            onChange={(event) => setTimeFilter(event.target.value as 'all' | '1h' | '24h' | '7d')}
+            className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-right text-sm focus:border-blue-500 focus:bg-white focus:outline-none"
+          >
+            <option value="all">{language === 'ar' ? 'كل الأوقات' : 'All time'}</option>
+            <option value="1h">{language === 'ar' ? 'آخر ساعة' : 'Last hour'}</option>
+            <option value="24h">{language === 'ar' ? 'آخر 24 ساعة' : 'Last 24 hours'}</option>
+            <option value="7d">{language === 'ar' ? 'آخر 7 أيام' : 'Last 7 days'}</option>
+          </select>
         </div>
       </div>
 
@@ -155,14 +319,14 @@ export const AuditLogs = ({ setToast, language }: AuditLogsProps) => {
                     جاري تحميل سجل العمليات...
                   </td>
                 </tr>
-              ) : auditLogs.length === 0 ? (
+              ) : filteredLogs.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-6 py-12 text-center text-sm text-slate-400">
-                    {language === 'ar' ? 'لا توجد سجلات بعد.' : 'No logs yet.'}
+                    {language === 'ar' ? 'لا توجد سجلات مطابقة للفلاتر الحالية.' : 'No logs match the current filters.'}
                   </td>
                 </tr>
               ) : (
-                auditLogs.map((log) => (
+                filteredLogs.map((log) => (
                   <tr key={log.id} className="transition-colors hover:bg-slate-50/50">
                     <td className="px-6 py-4">
                       <div className="flex items-center justify-end gap-3">

@@ -1,5 +1,6 @@
 export const memoryStore = {
   elections: new Map<string, any>(),
+  districts: new Map<string, any>(),
   voters: new Map<string, any>(),
   votes: new Map<string, any>(),
   auditLogs: new Map<string, any>(),

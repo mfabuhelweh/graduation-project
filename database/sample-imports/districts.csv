@@ -1,3 +1,3 @@
-election_title,district_name,district_code,seats_count
-انتخابات مجلس النواب الأردني 2026,الدائرة الأولى,D1,3
-انتخابات مجلس النواب الأردني 2026,الدائرة الثانية,D2,4
+election_title,district_name,governorate_name,district_code,seats_count
+انتخابات مجلس النواب الأردني 2026,الدائرة الأولى,عمان,D1,3
+انتخابات مجلس النواب الأردني 2026,الدائرة الثانية,إربد,D2,4

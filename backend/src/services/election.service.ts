@@ -196,19 +196,15 @@ async function rememberDeletedFixedElection(title?: string | null) {
 
 export async function listElections() {
   if (env.enableMemoryStore) {
-    return Array.from(memoryStore.elections.values())
-      .filter((election: any) => isVisibleSystemElectionTitle(election.title))
-      .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+    return Array.from(memoryStore.elections.values()).sort((a, b) =>
+      String(b.createdAt).localeCompare(String(a.createdAt)),
+    );
   }
 
   if (!usePostgres) {
     const snapshot = await adminDb.collection('elections').orderBy('createdAt', 'desc').get();
-    return snapshot.docs
-      .map((doc) => ({ id: doc.id, ...doc.data() }))
-      .filter((election: any) => isVisibleSystemElectionTitle(election.title));
+    return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
   }
-
-  await ensureFixedSystemElections();
 
   const result = await query(
     `SELECT e.*,
@@ -218,9 +214,32 @@ export async function listElections() {
             (SELECT COUNT(*) FROM voters v WHERE v.election_id = e.id) AS voters_count,
             (SELECT COUNT(*) FROM ballots b WHERE b.election_id = e.id) AS ballots_count
      FROM elections e
-     WHERE e.title = ANY($1::text[])
      ORDER BY e.created_at DESC`,
-    [VISIBLE_SYSTEM_ELECTION_TITLES],
+  );
+
+  return result.rows.map(mapElectionRow);
+}
+
+export async function listAdminElections() {
+  if (env.enableMemoryStore) {
+    return Array.from(memoryStore.elections.values())
+      .sort((a, b) => String((b as any).createdAt).localeCompare(String((a as any).createdAt)));
+  }
+
+  if (!usePostgres) {
+    const snapshot = await adminDb.collection('elections').orderBy('createdAt', 'desc').get();
+    return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+  }
+
+  const result = await query(
+    `SELECT e.*,
+            (SELECT COUNT(*) FROM districts d WHERE d.election_id = e.id) AS districts_count,
+            (SELECT COUNT(*) FROM parties p WHERE p.election_id = e.id) AS parties_count,
+            (SELECT COUNT(*) FROM district_lists dl WHERE dl.election_id = e.id) AS district_lists_count,
+            (SELECT COUNT(*) FROM voters v WHERE v.election_id = e.id) AS voters_count,
+            (SELECT COUNT(*) FROM ballots b WHERE b.election_id = e.id) AS ballots_count
+     FROM elections e
+     ORDER BY e.created_at DESC`,
   );
 
   return result.rows.map(mapElectionRow);
@@ -618,21 +637,25 @@ export async function getElectionDetails(electionId: string) {
         [electionId],
       ),
       query(
-        `SELECT id,
-                full_name AS "fullName",
-                national_id AS "nationalId",
-                gender,
-                birth_date AS "birthDate",
-                phone_number AS "phoneNumber",
-                email,
-                status,
-                has_voted AS "hasVoted",
-                verified_face AS "verifiedFace",
-                district_id AS "districtId",
-                created_at AS "createdAt"
-         FROM voters
-         WHERE election_id = $1
-         ORDER BY created_at DESC`,
+        `SELECT v.id,
+                v.full_name AS "fullName",
+                v.national_id AS "nationalId",
+                v.gender,
+                v.birth_date AS "birthDate",
+                v.age,
+                v.phone_number AS "phoneNumber",
+                v.email,
+                v.status,
+                v.has_voted AS "hasVoted",
+                v.verified_face AS "verifiedFace",
+                v.district_id AS "districtId",
+                d.name AS "districtName",
+                d.code AS "districtCode",
+                v.created_at AS "createdAt"
+         FROM voters v
+         JOIN districts d ON d.id = v.district_id
+         WHERE v.election_id = $1
+         ORDER BY v.created_at DESC`,
         [electionId],
       ),
       getElectionSetupSummary(electionId),

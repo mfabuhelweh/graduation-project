@@ -16,9 +16,10 @@ async function startServer() {
 
   // Simulated SMS Gateway API
   app.post("/api/sms/send", (req, res) => {
-    const { phoneNumber, message, provider } = req.body;
-    console.log(`[SMS GATEWAY - ${provider}] Sending to ${phoneNumber}: ${message}`);
-    res.json({ success: true, messageId: Math.random().toString(36).substring(7) });
+    res.status(503).json({
+      success: false,
+      message: "SMS sending is disabled in this environment"
+    });
   });
 
   // Health Check

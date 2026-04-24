@@ -16,14 +16,20 @@ export const SidebarItem = ({ icon: Icon, label, active, onClick, badge, collaps
     onClick={onClick}
     type="button"
     className={cn(
-      "flex items-center w-full px-4 py-2.5 my-0.5 rounded-xl transition-all duration-200 group",
-      active 
-        ? "bg-blue-600 text-white shadow-md shadow-blue-200" 
+      "sidebar-nav-item flex items-center w-full px-4 py-2.5 my-0.5 rounded-lg transition-all duration-200 group",
+      active
+        ? "sidebar-nav-item-active bg-blue-600 text-white shadow-md shadow-blue-200"
         : "text-slate-500 hover:bg-slate-50 hover:text-blue-600"
     )}
   >
-    <div className={cn("flex items-center justify-center transition-all", collapsed ? "mx-auto" : "ml-3")}>
-      <Icon size={20} strokeWidth={active ? 2.5 : 2} />
+    <div
+      className={cn(
+        "flex items-center justify-center rounded-xl transition-all",
+        active ? "bg-white/15 p-2 text-white" : "p-2 text-current",
+        collapsed ? "mx-auto" : "ml-3",
+      )}
+    >
+      <Icon size={20} strokeWidth={active ? 2.5 : 2} className={cn(active && "fill-current")} />
     </div>
     
     {!collapsed && (

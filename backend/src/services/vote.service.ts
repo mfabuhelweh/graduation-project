@@ -1,6 +1,5 @@
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { adminDb } from '../config/firebaseAdmin.js';
-import { LOCAL_SYSTEM_ELECTION_TITLE } from '../constants/systemElections.js';
 import { env } from '../config/env.js';
 import { createId, memoryStore } from '../data/memoryStore.js';
 import { query, usePostgres, withTransaction } from '../db/pool.js';
@@ -21,12 +20,10 @@ async function resolveElection(electionId?: string) {
       `SELECT id
        FROM elections
        WHERE status = 'active'
-         AND title = $1
          AND (start_at IS NULL OR start_at <= now())
          AND (end_at IS NULL OR end_at >= now())
        ORDER BY start_at ASC NULLS LAST, created_at DESC
        LIMIT 1`,
-      [LOCAL_SYSTEM_ELECTION_TITLE],
     );
     return result.rows[0] ? getElection(result.rows[0].id) : null;
   }

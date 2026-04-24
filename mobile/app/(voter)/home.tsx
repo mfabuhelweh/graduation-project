@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { AppHeader } from "@/components/AppHeader";
+import { ElectionCountdownCard } from "@/components/ElectionCountdownCard";
 import { ErrorMessage } from "@/components/ErrorMessage";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { ScreenContainer } from "@/components/ScreenContainer";
@@ -51,6 +52,8 @@ export default function HomeScreen() {
             : "Your voting card will appear here when an election is linked to your account.")
         }
       />
+
+      <ElectionCountdownCard election={selectedElection} />
 
       <VotingFlow
         electionId={selectedElection?.id || null}
