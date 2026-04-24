@@ -30,7 +30,7 @@ function resolveApiBaseUrl(): string {
 }
 
 const API_BASE_URL = resolveApiBaseUrl();
-const DEV_AUTH_ENABLED = import.meta.env.DEV && import.meta.env.VITE_ENABLE_DEV_AUTH === 'true';
+const DEV_AUTH_ENABLED = import.meta.env.VITE_ENABLE_DEV_AUTH === 'true';
 
 function getDemoModeHeaders(mode: 'sanad-otp' | 'face-verification' | 'sms') {
   if (!DEV_AUTH_ENABLED) {

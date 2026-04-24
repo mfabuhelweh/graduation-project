@@ -282,10 +282,15 @@ export const LoginPage = ({
       }));
 
       setFormMessage(
-        t(
-          'تم إرسال رمز التحقق إلى الحساب المرتبط عبر سند.',
-          'Verification code sent to your SANAD-linked account.',
-        ),
+        result.sandboxOtp
+          ? t(
+              `تم إرسال رمز التحقق إلى الحساب المرتبط عبر سند. رمز الاختبار: ${result.sandboxOtp}`,
+              `Verification code sent to your SANAD-linked account. Test code: ${result.sandboxOtp}`,
+            )
+          : t(
+              'تم إرسال رمز التحقق إلى الحساب المرتبط عبر سند.',
+              'Verification code sent to your SANAD-linked account.',
+            ),
       );
     } catch (sanadError) {
       setLocalError(

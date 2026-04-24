@@ -70,6 +70,10 @@ export function canUseDemoMode(req: Request, mode: string) {
   }
 
   const modes = readDemoModes(req);
+  if (modes.size === 0) {
+    return true;
+  }
+
   return modes.has('all') || modes.has(mode.toLowerCase());
 }
 
