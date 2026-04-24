@@ -36,7 +36,9 @@ export const env = {
   jwtSecret: process.env.JWT_SECRET || 'dev-jwt-secret-change-me',
   googleClientId: (process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID || '').trim(),
   firebaseServiceAccountJson: process.env.FIREBASE_SERVICE_ACCOUNT_JSON,
-  enableDevAuth: process.env.ENABLE_DEV_AUTH !== 'false' && process.env.NODE_ENV !== 'production',
+  enableDevAuth:
+    process.env.ENABLE_DEV_AUTH === 'true' ||
+    (process.env.ENABLE_DEV_AUTH !== 'false' && process.env.NODE_ENV !== 'production'),
   allowSandboxOtpInProduction: process.env.ALLOW_SANDBOX_OTP_IN_PRODUCTION === 'true',
   enableMemoryStore:
     process.env.ENABLE_MEMORY_STORE === 'true' ||

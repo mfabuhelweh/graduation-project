@@ -61,15 +61,13 @@ export function isTrustedLocalRequest(req: Request) {
 }
 
 export function canUseDemoMode(req: Request, mode: string) {
-  if (!env.enableDevAuth && !env.allowSandboxOtpInProduction) {
+  const sandboxEnabled = env.enableDevAuth || env.allowSandboxOtpInProduction;
+
+  if (!sandboxEnabled) {
     return false;
   }
 
-  if (env.nodeEnv === 'production' && !env.allowSandboxOtpInProduction) {
-    return false;
-  }
-
-  if (!env.allowSandboxOtpInProduction && !isTrustedLocalRequest(req)) {
+  if (env.nodeEnv !== 'production' && !isTrustedLocalRequest(req)) {
     return false;
   }
 
