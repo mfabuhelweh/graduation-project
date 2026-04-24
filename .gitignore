@@ -8,3 +8,5 @@ coverage/
 !.env.example
 mobile/.expo/
 .expo/allfiles.txt
+tools/jdk17/
+tools/jdk17.zip
