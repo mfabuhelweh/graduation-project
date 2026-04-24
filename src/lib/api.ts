@@ -1,9 +1,23 @@
 import { Capacitor } from '@capacitor/core';
 
-const configuredApiBaseUrl = (import.meta.env.VITE_API_BASE_URL || '').trim();
+const DEFAULT_PRODUCTION_API_BASE_URL = 'https://graduation-project-xcuy.onrender.com/api';
 
 function normalizeApiBaseUrl(baseUrl: string) {
   return baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+}
+
+function resolveConfiguredApiBaseUrl() {
+  const configuredApiBaseUrl = (import.meta.env.VITE_API_BASE_URL || '').trim();
+  const configuredBackendUrl = (import.meta.env.VITE_BACKEND_URL || '').trim();
+  const derivedFromBackendUrl = configuredBackendUrl
+    ? `${normalizeApiBaseUrl(configuredBackendUrl)}/api`
+    : '';
+
+  return [
+    configuredApiBaseUrl,
+    derivedFromBackendUrl,
+    DEFAULT_PRODUCTION_API_BASE_URL,
+  ].map((value) => value.trim()).find(Boolean) || '';
 }
 
 /**
@@ -17,7 +31,7 @@ function resolveApiBaseUrl(): string {
     return normalizeApiBaseUrl('/api');
   }
 
-  const configured = configuredApiBaseUrl ? normalizeApiBaseUrl(configuredApiBaseUrl) : '';
+  const configured = normalizeApiBaseUrl(resolveConfiguredApiBaseUrl());
   const native = Capacitor.isNativePlatform();
 
   if (native && !configured) {
