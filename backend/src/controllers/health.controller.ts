@@ -1,5 +1,7 @@
 import type {Request, Response} from 'express';
 import {query, usePostgres} from '../db/pool.js';
+import {env} from '../config/env.js';
+import {canUseDemoMode, getRequestedDemoModes} from '../utils/requestGuards.js';
 
 export async function getHealth(_req: Request, res: Response) {
   const timestamp = new Date().toISOString();
@@ -44,4 +46,29 @@ export async function getHealth(_req: Request, res: Response) {
       },
     });
   }
+}
+
+export function getDemoAuthHealth(req: Request, res: Response) {
+  const requestedModes = [...getRequestedDemoModes(req)];
+
+  res.json({
+    success: true,
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    environment: {
+      nodeEnv: env.nodeEnv,
+      enableDevAuth: env.enableDevAuth,
+      allowSandboxOtpInProduction: env.allowSandboxOtpInProduction,
+    },
+    request: {
+      origin: req.header('Origin') || null,
+      referer: req.header('Referer') || null,
+      requestedDemoModes: requestedModes,
+    },
+    evaluation: {
+      sanadOtpAllowed: canUseDemoMode(req, 'sanad-otp'),
+      smsAllowed: canUseDemoMode(req, 'sms'),
+      faceVerificationAllowed: canUseDemoMode(req, 'face-verification'),
+    },
+  });
 }

@@ -36,7 +36,7 @@ function extractHostname(value?: string | null) {
   }
 }
 
-function readDemoModes(req: Request) {
+export function getRequestedDemoModes(req: Request) {
   const headerValue = req.header('X-Demo-Mode') || req.header('x-demo-mode') || '';
   return new Set(
     headerValue
@@ -71,7 +71,7 @@ export function canUseDemoMode(req: Request, mode: string) {
     return false;
   }
 
-  const modes = readDemoModes(req);
+  const modes = getRequestedDemoModes(req);
   if (modes.size === 0) {
     return true;
   }
