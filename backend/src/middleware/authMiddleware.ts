@@ -89,7 +89,9 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
 
 export function optionalAuthMiddleware(req: Request, _res: Response, next: NextFunction) {
   const header = req.header('Authorization');
-  if (!header?.startsWith('Bearer ')) {
+  const devAuthHeader = req.header('X-Dev-Auth') || req.header('x-dev-auth');
+
+  if (!header?.startsWith('Bearer ') && !devAuthHeader) {
     return next();
   }
 

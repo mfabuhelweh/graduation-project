@@ -466,6 +466,7 @@ export async function verifyFaceAndIssueToken(
 
     if (!voter) throw new Error('Voter is not registered');
     if (
+      !options?.allowDemoVerification &&
       !isElectionActiveForVoting({
         status: voter.election_status,
         startAt: voter.start_at,
