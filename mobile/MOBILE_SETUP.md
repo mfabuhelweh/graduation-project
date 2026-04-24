@@ -76,7 +76,7 @@ npm run mobile:web         # تشغيل على الويب
 EXPO_PUBLIC_API_BASE_URL=http://10.0.2.2:3215/api
 
 # للمحاكي iOS (iOS Simulator)
-EXPO_PUBLIC_API_BASE_URL=http://localhost:3215/api
+EXPO_PUBLIC_API_BASE_URL=https://graduation-project-xcuy.onrender.com//api
 
 # للهاتف الحقيقي على نفس الشبكة
 EXPO_PUBLIC_API_BASE_URL=http://192.168.x.x:3215/api
@@ -171,5 +171,5 @@ npx expo run:android
 npm run typecheck
 
 # التأكد من عمل الـ API
-curl http://localhost:3215/api/health
+curl https://graduation-project-xcuy.onrender.com//api/health
 ```

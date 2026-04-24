@@ -24,7 +24,7 @@ export default defineConfig(({mode}) => {
       },
       proxy: {
         '/api': {
-          target: env.VITE_BACKEND_URL || 'http://localhost:3215',
+          target: env.VITE_BACKEND_URL || 'https://graduation-project-xcuy.onrender.com/',
           changeOrigin: true,
         },
       },

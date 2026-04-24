@@ -60,8 +60,8 @@ npm run start:backend
 
 المنفذ الحالي من ملف البيئة:
 
-- Backend: `http://localhost:3215`
-- Health check: `http://localhost:3215/api/health`
+- Backend: `https://graduation-project-xcuy.onrender.com/`
+- Health check: `https://graduation-project-xcuy.onrender.com//api/health`
 
 ### 2. Web Admin
 
@@ -91,7 +91,7 @@ EXPO_PUBLIC_API_BASE_URL=http://192.168.131.115:3215/api
 ملاحظات مهمة:
 
 - Android emulator: استخدم غالبًا `http://10.0.2.2:3215/api`
-- iOS simulator: استخدم `http://localhost:3215/api`
+- iOS simulator: استخدم `https://graduation-project-xcuy.onrender.com//api`
 - الهاتف الحقيقي على نفس الشبكة: استخدم عنوان الـ Wi-Fi المحلي أعلاه
 
 ## Verification Done
